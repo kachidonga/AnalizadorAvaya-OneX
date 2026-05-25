@@ -1,0 +1,19 @@
+# Binaries
+*.exe
+
+# Log files
+*.log
+Log Files/
+Logs de ejemplo/
+Log1.txt
+Log1.xlsx
+
+# Example case folders
+Ejemplo*/
+Firmarse*/
+
+# Claude Code internal
+.claude/
+
+# Temp files
+*.tmp
