@@ -934,7 +934,11 @@ $btnAnalizar.Add_Click({
                     if (-not $LineasLog) { continue }
 
                     # Primera pasada: extensiones y logins
+                    # IMPORTANTE: filtrar por $FechaOmni igual que la segunda pasada.
+                    # Sin este filtro, los archivos EndpointLog.txt rotados (de días anteriores)
+                    # contaminan la lista con extensiones y logins de otras fechas.
                     foreach ($linea in $LineasLog) {
+                        if ($linea -notmatch "^\[?$FechaOmni") { continue }
                         if ($linea -match "StartUserRegistration: server: '[^']+', extension: '(\d+)'") {
                             $ExtEncontrada = $matches[1]
                             $HoraFirma = if ($linea -match "\d{2}:\d{2}:\d{2}") { $matches[0] } else { "---" }
