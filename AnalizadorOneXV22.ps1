@@ -1097,6 +1097,11 @@ $btnAnalizar.Add_Click({
                                     if ($TelActual -match "^\+?564(3\d{5})\d{6}$") { $EvA = "" }
                                     else {
                                         if ($DirLlamada[$Ses] -eq "SALIENTE") {
+                                            # Fallback: si PASO 4 ya puso el label pero sin registrar $SesionHoraInicio
+                                            if ($EventosTiempo[$HoraLimpia].Interpretacion -match "LÍNEA ABIERTA SIN MARCAR" -and
+                                                -not $SesionHoraInicio.ContainsKey($Ses)) {
+                                                $SesionHoraInicio[$Ses] = $HoraLimpia
+                                            }
                                             # Solo crear INICIO si XML no lo hizo ya
                                             if ($EventosTiempo[$HoraLimpia].Interpretacion -notmatch "señal de llamada|intentando firmarse|INICIO DE LLAMADA|LÍNEA ABIERTA") {
                                                 if ($TelActual -match "Desconocido") {
@@ -1111,6 +1116,14 @@ $btnAnalizar.Add_Click({
                                                 }
                                             }
                                         } elseif ($DirLlamada[$Ses] -ne "ENTRANTE") {
+                                            # Fallback: si PASO 4 ya puso LÍNEA ABIERTA en este slot (llamada saliente via
+                                            # botón físico / lampara de línea, sin MakeCall en log), registrar la hora ahora
+                                            # para que el upgrade pueda ejecutarse cuando llegue el teléfono real en el
+                                            # siguiente UpdateHistoryRecord — aunque el guard -notmatch lo bloquee abajo.
+                                            if ($EventosTiempo[$HoraLimpia].Interpretacion -match "LÍNEA ABIERTA SIN MARCAR" -and
+                                                -not $SesionHoraInicio.ContainsKey($Ses)) {
+                                                $SesionHoraInicio[$Ses] = $HoraLimpia
+                                            }
                                             if ($EventosTiempo[$HoraLimpia].Interpretacion -notmatch "intentando firmarse|INICIO DE LLAMADA|LÍNEA ABIERTA|señal de llamada") {
                                                 if ($TelActual -match "Desconocido") {
                                                     $EventosTiempo[$HoraLimpia].Interpretacion = "$symUp LÍNEA ABIERTA SIN MARCAR (Posible evasión)"
