@@ -8,6 +8,21 @@ Logs de ejemplo/
 Log1.txt
 Log1.xlsx
 
+# Avaya log files sueltos (no son *.log)
+EndpointLog.txt
+AudioLog.txt
+IspeacLog.txt
+H323Station.txt
+FFLogs.txt
+IELogs.txt
+ContactLog.xml
+
+# Extracciones RAW y datos (no son codigo)
+*.csv
+
+# Documentos generados / bitacoras
+*.docx
+
 # Example case folders
 Ejemplo*/
 Firmarse*/
