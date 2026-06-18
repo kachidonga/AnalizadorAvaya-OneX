@@ -3956,10 +3956,19 @@ $mnuDetalleTransf.Add_Click({
     }
     if ($HoraInicio -ne "") {
         try {
-            $tIni = [datetime]::ParseExact($HoraInicio, "HH:mm:ss", $null)
-            $tFin = [datetime]::ParseExact($HoraGrid,   "HH:mm:ss", $null)
-            $dur  = [int]($tFin - $tIni).TotalSeconds
-            $DuracionStr = if ($dur -ge 60) { "$([int]($dur/60))m $($dur % 60)s" } else { "${dur}s" }
+            # Los slots vienen como "HH:mm:ss" o "HH:mm:ss,fff" (la coma separa los ms).
+            # ParseExact con solo "HH:mm:ss" reventaba con la parte de ms → "Error al calcular".
+            $pIni = $HoraInicio -split ','
+            $pFin = $HoraGrid   -split ','
+            $tIni = [datetime]::ParseExact($pIni[0], "HH:mm:ss", $null)
+            if ($pIni.Count -gt 1 -and $pIni[1] -match '^\d+$') { $tIni = $tIni.AddMilliseconds([int]$pIni[1]) }
+            $tFin = [datetime]::ParseExact($pFin[0], "HH:mm:ss", $null)
+            if ($pFin.Count -gt 1 -and $pFin[1] -match '^\d+$') { $tFin = $tFin.AddMilliseconds([int]$pFin[1]) }
+            $msTot = [int]($tFin - $tIni).TotalMilliseconds
+            if ($msTot -lt 0) { $msTot = 0 }
+            $DuracionStr = if ($msTot -ge 60000) { "$([int]($msTot/60000))m $([int](($msTot%60000)/1000))s" }
+                           elseif ($msTot -ge 1000) { ("{0:0.##}s" -f ($msTot/1000.0)) }
+                           else { "$msTot ms" }
         } catch { $DuracionStr = "Error al calcular" }
     }
 
@@ -3968,6 +3977,24 @@ $mnuDetalleTransf.Add_Click({
     if ($RawTransf -match "Transfer_CompleteSetup[^\n]+") { $LineaCompleteSetup = $matches[0].Trim() }
     $LineaDisplay = ""
     if ($RawTransf -match "SetPhoneDisplay[^\n]+") { $LineaDisplay = $matches[0].Trim() }
+
+    # ── Líneas de log de los pasos previos (escaneo de filas hacia atrás) ──
+    # Recorre desde la fila COMPLETADA hasta la de TRANSFERENCIA INICIADA y recolecta la
+    # línea cruda (con su timestamp) que originó cada paso, para mostrarla como evidencia.
+    $RawPressTransfer = ""   # OnRequestTransferSession (el agente presionó Transferir)
+    $RawTransferReq   = ""   # TransferSessionRequest (OneX → PBX)
+    $RawActivate      = ""   # Transfer_ActivateConsultCall (consulta atendida)
+    for ($i = $RowIdx; $i -ge 0; $i--) {
+        $r = $GridResultados.Rows[$i]
+        if ($r.IsNewRow) { continue }
+        $tg = $r.Cells["EvAgente"].Tag
+        if ($tg) {
+            if ($RawTransferReq   -eq "" -and $tg -match "[^\r\n]*Message type= TransferSessionRequest[^\r\n]*") { $RawTransferReq   = $matches[0].Trim() }
+            if ($RawPressTransfer -eq "" -and $tg -match "[^\r\n]*OnRequestTransferSession\(\)[^\r\n]*")          { $RawPressTransfer = $matches[0].Trim() }
+            if ($RawActivate      -eq "" -and $tg -match "[^\r\n]*Transfer_ActivateConsultCall[^\r\n]*")          { $RawActivate      = $matches[0].Trim() }
+        }
+        if ($i -lt $RowIdx -and $r.Cells["EvAgente"].Value -match "TRANSFERENCIA INICIADA") { break }
+    }
 
     # ── Ventana ─────────────────────────────────────────────────────
     $fTransf = New-Object System.Windows.Forms.Form
@@ -3993,6 +4020,7 @@ $mnuDetalleTransf.Add_Click({
     $cInfo = [System.Drawing.Color]::Silver
     $cW    = [System.Drawing.Color]::White
     $cGold = [System.Drawing.Color]::Gold
+    $cRaw  = [System.Drawing.Color]::DarkGray
 
     $LT = {
         param($txt, $col, [bool]$bold=$false)
@@ -4001,6 +4029,14 @@ $mnuDetalleTransf.Add_Click({
         $rtbT.SelectionColor  = $col
         $rtbT.SelectionFont   = if ($bold) { New-Object System.Drawing.Font($rtbT.Font.FontFamily, $rtbT.Font.Size, [System.Drawing.FontStyle]::Bold) } else { $rtbT.Font }
         $rtbT.AppendText("$txt`n")
+    }
+    # Helper: imprime la linea de log cruda (evidencia) debajo de un paso, truncada.
+    $LTraw = {
+        param($raw)
+        if ($raw -and $raw -ne "") {
+            $s = if ($raw.Length -gt 110) { $raw.Substring(0,110) + "..." } else { $raw }
+            & $LT "     $s" $cRaw
+        }
     }
 
     # ── Contenido ───────────────────────────────────────────────────
@@ -4055,17 +4091,24 @@ $mnuDetalleTransf.Add_Click({
     & $LT "  Como lo hizo el sistema paso a paso:" $cHdr $true
     if ($TipoTransf -match "Atendida") {
         & $LT "  1. El agente presiono Transferir en OneX" $cInfo
+        & $LTraw $RawPressTransfer
         & $LT "  2. Sono la linea del destino — el agente hablo con el" $cInfo
         & $LT "     receptor para avisarle de la transferencia" $cInfo
+        & $LTraw $RawActivate
         & $LT "  3. El agente confirmo la transferencia en OneX" $cInfo
         & $LT "  4. OneX envio TransferSessionRequest al PBX" $cInfo
+        & $LTraw $RawTransferReq
         & $LT "  5. El PBX respondio con Transfer_CompleteSetup" $cOk
+        & $LTraw $LineaCompleteSetup
         & $LT "  6. El cliente quedo conectado directamente con el destino" $cOk
     } else {
         & $LT "  1. El agente presiono Transferir en OneX" $cInfo
+        & $LTraw $RawPressTransfer
         & $LT "  2. OneX envio TransferSessionRequest al PBX con el numero destino" $cInfo
+        & $LTraw $RawTransferReq
         & $LT "  3. El PBX enruto la llamada sin esperar confirmacion del destino" $cInfo
         & $LT "  4. El PBX respondio con Transfer_CompleteSetup" $cOk
+        & $LTraw $LineaCompleteSetup
         & $LT "  5. El cliente quedo enrutado hacia el destino" $cOk
     }
     & $LT "" $cW
