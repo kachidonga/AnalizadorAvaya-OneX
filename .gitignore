@@ -32,3 +32,16 @@ Firmarse*/
 
 # Temp files
 *.tmp
+
+# Respaldos / checkpoints de versiones anteriores del codigo (NO el V22 actual)
+AnalizadorOneXV2*.ps1
+Auditoria*.ps1
+!AnalizadorOneXV22.ps1
+
+# Notas sueltas de trabajo
+cambios*.txt
+auto accepting.txt
+Error cuando se cierra sola.txt
+
+# Script generado una sola vez (bitacora)
+gen_bitacora.py
