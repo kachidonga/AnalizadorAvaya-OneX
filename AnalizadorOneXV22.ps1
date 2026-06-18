@@ -2046,6 +2046,60 @@ $btnAnalizar.Add_Click({
             }
 
             # ================================================================
+            # REFINAMIENTO "LÍNEA ABIERTA SIN MARCAR" (claridad / quitar ruido)
+            # La etiqueta confundía porque aparecía aunque la fila ya tuviera un evento de
+            # transferencia o la misma sesión hubiera marcado un número — y "sin marcar"
+            # suena a evasión cuando muchas veces es una apertura de línea intencional.
+            # IMPORTANTE: la EVASIÓN real se detecta aparte en ProcessSessionEndedEvent
+            # (¡EVASIÓN!), independiente de esta etiqueta, y la apertura de línea queda
+            # marcada por PressLineAppearance ("↗ Apertura de línea desde botón"). Aquí solo
+            # se limpian los casos que NO son evasión; el caso phantom sin número se conserva.
+            # ================================================================
+            $SegDeSlot = {
+                param($s)
+                $p = ($s -split ',')[0]
+                try { return [int]([datetime]::ParseExact($p,"HH:mm:ss",$null).TimeOfDay.TotalSeconds) } catch { return -1 }
+            }
+            foreach ($hLA2 in @($EventosTiempo.Keys)) {
+                if (-not $EventosTiempo.ContainsKey($hLA2)) { continue }
+                $oLA = $EventosTiempo[$hLA2]
+                if ($oLA.Interpretacion -notmatch "LÍNEA ABIERTA SIN MARCAR") { continue }
+
+                # (1) La fila ya trae un evento de transferencia → la LÍNEA ABIERTA es ruido del
+                #     mecanismo; se quita la etiqueta y la fila conserva el evento real.
+                if ($oLA.Agente -match "TRANSFERENCIA INICIADA|TRANSFERENCIA EN PROCESO|TRANSFERENCIA COMPLETADA") {
+                    $oLA.Interpretacion = ""; $oLA.ColorInterpretacion = [System.Drawing.Color]::White
+                    continue
+                }
+
+                # (2) La misma sesión ya tiene un INICIO DE LLAMADA dentro de ±20 s → esta fila es
+                #     el instante previo a marcar; redundante (el número SÍ se marcó). Se suprime.
+                #     La ventana de 20 s evita pisar evasiones reales si el SessionId se reutiliza
+                #     más tarde para otra llamada distinta.
+                $TieneInicioSes = $false
+                if ($oLA.Sesion -and $oLA.Sesion -ne "-") {
+                    $segLA = & $SegDeSlot $hLA2
+                    foreach ($kI2 in @($EventosTiempo.Keys)) {
+                        if ($kI2 -eq $hLA2) { continue }
+                        if ($EventosTiempo[$kI2].Sesion -eq $oLA.Sesion -and $EventosTiempo[$kI2].Interpretacion -match "INICIO DE LLAMADA") {
+                            $segIni = & $SegDeSlot $kI2
+                            if ($segLA -ge 0 -and $segIni -ge 0 -and [math]::Abs($segIni - $segLA) -le 20) { $TieneInicioSes = $true; break }
+                        }
+                    }
+                }
+                if ($TieneInicioSes) {
+                    if ($oLA.Agente -eq "" -and $oLA.AppLog -eq "" -and $oLA.SysLog -eq "" -and $oLA.Audio -eq "" -and $oLA.Ispeac -eq "") {
+                        $EventosTiempo.Remove($hLA2) | Out-Null
+                    } else {
+                        $oLA.Interpretacion = ""; $oLA.ColorInterpretacion = [System.Drawing.Color]::White
+                    }
+                    continue
+                }
+                # (3) else: línea abierta sin número y sin marcación posterior → posible EVASIÓN;
+                #     se conserva "LÍNEA ABIERTA SIN MARCAR" (el cierre confirmará con ¡EVASIÓN!).
+            }
+
+            # ================================================================
             # FALLBACK FIN: Call StateChanged OldState=Active,NewState=Disconnected
             # Aplica FIN para sesiones que PASO 5 (ProcessSessionEndedEvent) no cubrió.
             # En este punto $CuelguesVistos y $CuelguesManuales ya están poblados por PASO 5.
