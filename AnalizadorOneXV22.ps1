@@ -923,12 +923,30 @@ $btnAnalizar.Add_Click({
                                 if ($EventosTiempo[$HoraLimpia].Tel -eq "-") { $EventosTiempo[$HoraLimpia].Tel = $NumRaw }
                                 $EventosTiempo[$HoraLimpia].RawInterpretacion += "$linea`n"; $EventosTiempo[$HoraLimpia].RawAux += "$linea`n"
                             }
-                            # --- CONFIRMACIÓN ACD (fallback, funciona con o sin XML) ---
-                            elseif (-not $XMLCargado -and $linea -match "(?i)Setting Vi\.InboundAcd=true") {
+                            # --- CONFIRMACIÓN ACD: "Setting Vi.InboundAcd=true" es el veredicto REAL de que la
+                            # llamada entró por la cola ACD (más confiable que el largo del número o el topic;
+                            # la línea VoiceInteractionListImpl.Add que crea la señal trae inboundAcd=False, y el
+                            # TRUE llega después en esta línea aparte). Reetiqueta la señal de ESE VI de
+                            # INTERNA/EXTERNA → "ACD - <topic>". Funciona con o sin XML; cruza por el UUID del VI.
+                            elseif ($linea -match "(?i)Setting Vi\.InboundAcd=true") {
                                 Init-Hora $HoraLimpia
-                                if ($Script:UltimaHoraAlerting -ne $null -and $EventosTiempo[$Script:UltimaHoraAlerting].Interpretacion -match "INTERNA") {
-                                    $TopicVal = if ($Script:UltimoTopic -ne "Desconocido" -and $Script:UltimoTopic -ne $null -and $Script:UltimoTopic -ne "Sin_Topic") { $Script:UltimoTopic } else { "ACD" }
-                                    $EventosTiempo[$Script:UltimaHoraAlerting].Interpretacion = $EventosTiempo[$Script:UltimaHoraAlerting].Interpretacion -replace "INTERNA - [^)]+", "ACD - $TopicVal"
+                                $AcdSlot = $null
+                                if ($linea -match "VI=VoiceInteractionImpl\[VI\d+:([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})") {
+                                    $AcdViUuid = $matches[1]
+                                    if ($Script:AlertingHoras.ContainsKey($AcdViUuid)) {
+                                        $AcdSlot = $Script:AlertingHoras[$AcdViUuid]
+                                        if ($Script:AlertingHorasRedirect.ContainsKey($AcdSlot)) { $AcdSlot = $Script:AlertingHorasRedirect[$AcdSlot] }
+                                    }
+                                }
+                                if (-not $AcdSlot -and $Script:UltimaHoraAlerting -ne $null) { $AcdSlot = $Script:UltimaHoraAlerting }
+                                if ($AcdSlot -and $EventosTiempo.ContainsKey($AcdSlot) -and
+                                    $EventosTiempo[$AcdSlot].Interpretacion -match "señal de llamada" -and
+                                    $EventosTiempo[$AcdSlot].Interpretacion -notmatch "Entrante - ACD") {
+                                    $TopicReal = if ($EventosTiempo[$AcdSlot].Topic -and $EventosTiempo[$AcdSlot].Topic.Trim() -ne "") { $EventosTiempo[$AcdSlot].Topic.Trim() }
+                                                 elseif ($Script:UltimoTopic -and ($Script:UltimoTopic -notin @("Desconocido","Sin_Topic")) -and $Script:UltimoTopic.Trim() -ne "") { $Script:UltimoTopic.Trim() }
+                                                 else { "" }
+                                    $NuevoTagAcd = if ($TopicReal -ne "") { "ACD - $TopicReal" } else { "ACD" }
+                                    $EventosTiempo[$AcdSlot].Interpretacion = $EventosTiempo[$AcdSlot].Interpretacion -replace "(INTERNA|EXTERNA) - [^)]+", $NuevoTagAcd
                                 }
                                 $EventosTiempo[$HoraLimpia].RawInterpretacion += "$linea`n"; $EventosTiempo[$HoraLimpia].RawAux += "$linea`n"
                             }
