@@ -1,0 +1,49 @@
+# Binaries
+*.exe
+
+# Log files
+*.log
+Log Files/
+Logs de ejemplo/
+Log1.txt
+Log1.xlsx
+
+# Avaya log files sueltos (no son *.log)
+EndpointLog.txt
+AudioLog.txt
+IspeacLog.txt
+H323Station.txt
+FFLogs.txt
+IELogs.txt
+ContactLog.xml
+
+# Extracciones RAW y datos (no son codigo)
+*.csv
+
+# Documentos generados / bitacoras
+*.docx
+# Los manuales se versionan como fuente .md; el .pdf se regenera desde el .md
+*.pdf
+
+# Example case folders
+Ejemplo*/
+Firmarse*/
+
+# Claude Code internal
+.claude/
+
+# Temp files
+*.tmp
+
+# Respaldos / checkpoints de versiones anteriores del codigo (NO el V22 actual)
+AnalizadorOneXV2*.ps1
+Auditoria*.ps1
+!AnalizadorOneXV22.ps1
+
+# Notas sueltas de trabajo
+cambios*.txt
+auto accepting.txt
+Error cuando se cierra sola.txt
+
+# Script generado una sola vez (bitacora)
+gen_bitacora.py
