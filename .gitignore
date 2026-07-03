@@ -22,6 +22,8 @@ ContactLog.xml
 
 # Documentos generados / bitacoras
 *.docx
+# Los manuales se versionan como fuente .md; el .pdf se regenera desde el .md
+*.pdf
 
 # Example case folders
 Ejemplo*/
