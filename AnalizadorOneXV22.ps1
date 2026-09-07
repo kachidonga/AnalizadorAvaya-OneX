@@ -15,6 +15,8 @@ $symMusic = [char]9834
 $symArr   = [char]8594
 $symUser  = [char]9679
 $symOK    = [char]10003   # ✓  confirmación de éxito
+$symPhone = [char]9742    # ☎  contestaron (saliente conectada)
+$symPause = [char]10074   # ❚  el asesor pone la llamada en espera (hold del agente)
 
 # --- VARIABLES GLOBALES DE SESIÓN ---
 $Script:Creds          = $null
@@ -77,6 +79,15 @@ $btnExportarCSV.Anchor = [System.Windows.Forms.AnchorStyles]::Top -bor [System.W
 $chkVerCalidad = New-Object System.Windows.Forms.CheckBox; $chkVerCalidad.Text = "Ver Calidad de Red"; $chkVerCalidad.Location = New-Object System.Drawing.Point(1435, 20); $chkVerCalidad.ForeColor = [System.Drawing.Color]::Cyan; $chkVerCalidad.AutoSize = $true; $chkVerCalidad.Checked = $false
 $chkVerCalidad.Anchor = [System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Right
 
+# Botón para revisar posibles errores del código base (fuera del timeline). Aparece tras analizar, si hay.
+$btnRevisarErrores = New-Object System.Windows.Forms.Button; $btnRevisarErrores.Text = "⚠ Revisar posibles errores"; $btnRevisarErrores.Location = New-Object System.Drawing.Point(1310, 78); $btnRevisarErrores.Size = New-Object System.Drawing.Size(210, 26); $btnRevisarErrores.BackColor = [System.Drawing.Color]::FromArgb(80,70,20); $btnRevisarErrores.ForeColor = [System.Drawing.Color]::Khaki; $btnRevisarErrores.FlatStyle = "Flat"; $btnRevisarErrores.Font = New-Object System.Drawing.Font("Segoe UI", 8.5, [System.Drawing.FontStyle]::Bold); $btnRevisarErrores.Visible = $false
+$btnRevisarErrores.Anchor = [System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Right
+
+# Botón para revisar VACÍOS de log (silencio total en Endpoint+AvayaOneX = posible congelamiento del
+# proceso OneXAgent.exe) detectados en el DÍA COMPLETO. Aparece tras analizar, si hay. (Pablo, 08/2026.)
+$btnVacios = New-Object System.Windows.Forms.Button; $btnVacios.Text = "🔍 Vacíos en logs"; $btnVacios.Location = New-Object System.Drawing.Point(1090, 78); $btnVacios.Size = New-Object System.Drawing.Size(210, 26); $btnVacios.BackColor = [System.Drawing.Color]::FromArgb(20,50,80); $btnVacios.ForeColor = [System.Drawing.Color]::LightSkyBlue; $btnVacios.FlatStyle = "Flat"; $btnVacios.Font = New-Object System.Drawing.Font("Segoe UI", 8.5, [System.Drawing.FontStyle]::Bold); $btnVacios.Visible = $false
+$btnVacios.Anchor = [System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Right
+
 # --- FILA 2-3: ESTADO E INFO ---
 $lblStatus = New-Object System.Windows.Forms.Label; $lblStatus.Location = New-Object System.Drawing.Point(20, 55); $lblStatus.Size = New-Object System.Drawing.Size(1400, 20); $lblStatus.ForeColor = [System.Drawing.Color]::Yellow; $lblStatus.Text = "Ingresa la IP y haz clic en '1. BUSCAR USUARIOS', o usa '3. RUTA MANUAL' si tienes los logs guardados en tu equipo."
 $lblExtension = New-Object System.Windows.Forms.Label; $lblExtension.Text = "Ids Detectados: Pendiente..."; $lblExtension.Location = New-Object System.Drawing.Point(20, 80); $lblExtension.AutoSize = $true; $lblExtension.ForeColor = [System.Drawing.Color]::Cyan; $lblExtension.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
@@ -98,6 +109,7 @@ $GridResultados.EnableHeadersVisualStyles = $false
 $GridResultados.Columns.Add("Hora", "Hora") | Out-Null; $GridResultados.Columns["Hora"].FillWeight = 6
 $GridResultados.Columns.Add("Sesion", "Sesión") | Out-Null; $GridResultados.Columns["Sesion"].FillWeight = 4
 $GridResultados.Columns.Add("Telefono", "Teléfono") | Out-Null; $GridResultados.Columns["Telefono"].FillWeight = 10
+$GridResultados.Columns.Add("EvDtmf", "DTMF") | Out-Null; $GridResultados.Columns["EvDtmf"].FillWeight = 8
 $GridResultados.Columns.Add("Interpretacion", "Actividad del Agente") | Out-Null; $GridResultados.Columns["Interpretacion"].FillWeight = 20
 $GridResultados.Columns.Add("EvAgente", "Endpoint.log") | Out-Null; $GridResultados.Columns["EvAgente"].FillWeight = 15
 $GridResultados.Columns.Add("EvAudio", "Audio.log") | Out-Null; $GridResultados.Columns["EvAudio"].FillWeight = 15   # Se reconsideró ocultarla: al esconderla, los slots de "Línea abierta/cerrada" (que solo pueblan Audio) quedaban como filas vacías. Se mantiene visible.
@@ -107,7 +119,7 @@ $GridResultados.Columns.Add("EvSysLog", "Log de Sistema") | Out-Null; $GridResul
 $GridResultados.Columns.Add("EvAppLog", "Log de Aplicación") | Out-Null; $GridResultados.Columns["EvAppLog"].FillWeight = 10
 foreach ($col in $GridResultados.Columns) { $col.SortMode = [System.Windows.Forms.DataGridViewColumnSortMode]::NotSortable }
 
-$Form.Controls.AddRange(@($lblIP, $txtIP, $btnBuscarUsr, $lblUsuario, $cmbUsuarios, $btnAnalizar, $lblFecha, $dtpFecha, $btnRutaManual, $btnInfoPC, $btnReinicios, $btnExtraccion, $btnBusqueda, $btnExportarCSV, $chkVerCalidad, $lblExtension, $lblStatus, $GridResultados))
+$Form.Controls.AddRange(@($lblIP, $txtIP, $btnBuscarUsr, $lblUsuario, $cmbUsuarios, $btnAnalizar, $lblFecha, $dtpFecha, $btnRutaManual, $btnInfoPC, $btnReinicios, $btnExtraccion, $btnBusqueda, $btnExportarCSV, $chkVerCalidad, $btnRevisarErrores, $btnVacios, $lblExtension, $lblStatus, $GridResultados))
 
 # ====================================================================
 # MENÚ CONTEXTUAL DEL GRID: DIAGNÓSTICO DE LLAMADA (botón derecho)
@@ -362,6 +374,19 @@ $btnAnalizar.Add_Click({
     $EventosTiempo       = @{}
     $ListaExtensiones    = @()
     $ListaLogins         = @()
+    # Buffer de posibles errores del código base (ERROR/Exception/FATAL genéricos). NO se pintan en el
+    # timeline (inflaban con ruido benigno y "Evento sospechoso" alarmaba en pantalla compartida); se
+    # revisan aparte con el botón "Revisar posibles errores".
+    $Script:ErroresSospechosos = @()
+    $btnRevisarErrores.Visible = $false
+    # Buscador de VACÍOS de log (día completo): ms-del-día de TODA línea con timestamp en Endpoint+
+    # AvayaOneX (proceso principal) e IspeacLog (proceso independiente), recolectados sin releer
+    # archivos durante PASO 3/4/5. List[Int64] en vez de array +=: evita el costo O(n²) en logs de
+    # un día completo (pueden ser decenas de miles de líneas).
+    $Script:TsProceso = [System.Collections.Generic.List[Int64]]::new()
+    $Script:TsIspeac  = [System.Collections.Generic.List[Int64]]::new()
+    $Script:VaciosDetectados = @()
+    $btnVacios.Visible = $false
     $Script:ModoContestacion    = @{}
     $Script:AlertingHoras         = @{}
     $Script:AlertingHorasConsumed  = @{}
@@ -377,7 +402,14 @@ $btnAnalizar.Add_Click({
     $SesionHoraInicio = @{}          # sesionId → horaSlot: para actualizar LÍNEA ABIERTA cuando llega tel real
     $CallStateDisconnected = @{}     # sesionId → horaSlot: fallback FIN cuando ProcessSessionEndedEvent no aparece
     $MapeoTelP4 = @{}                # sesionId → tel: capturado en PASO 4 desde "Call ended" cuando EndpointLog no tiene la sesión
-    $HoldImplicito = @{}             # sesionId → horaSlot: hold automático del sistema (sin clic de Hold)
+    $HoldImplicito = @{}             # sesionId → LISTA de horaSlot: cada hold automático del sistema (sin clic de Hold). Navegando entre líneas una llamada se retiene varias veces.
+    $RetomaImplicita = @{}           # sesionId → LISTA de horaSlot: cada vez que la llamada sale del hold (Inactive→Active) al volver a su línea
+    $CallCreatedMs = @()             # ms absolutos de cada "Call created": distingue "abre línea" (nace llamada) de "cambia a la línea" (se retoma una existente)
+    $DtmfPresses = @()               # lista de pulsaciones DTMF del asesor durante una llamada: @{Sim;Ses;Hora}. constant 19-28=0-9, 29='*', 30='#'
+    $DtmfConstPend = $null           # constant del último "input digit constant" en espera de su nCallIndex (sesión)
+    $DtmfHoraPend  = $null           # slot ms de esa pulsación pendiente
+    $NewCallSlots  = @()             # slots "HH:mm:ss,fff" de cada NewCallHandler (asesor captura número en caja + Enter)
+    $DialedApply   = @()             # números pasados por ApplyDialingRulesToNumber: @{Ms;Num}. Se emparejan con NewCallSlots para mostrar el número en la etiqueta
     $ViDisconnected = @{}            # viUUID → horaSlot: FIN por VI StateImpl type=Disconnected (cubre cuelgue en hold sin EndpointLog/ProcessSessionEndedEvent)
     $ViFinEnHold = @{}               # viUUID → $true: el VI estaba en hold (Inactive) al desconectarse → CLIENTE COLGÓ EN HOLD
     $ViLastState = @{}               # viUUID → "Active"/"Inactive": último estado vivo del VI antes del Disconnected
@@ -387,7 +419,121 @@ $btnAnalizar.Add_Click({
     $Script:FallaRecepSlot = $null   # slot activo de "FALLA EN LA RECEPCIÓN DE LLAMADA": mientras esté seteado, las líneas sin fecha (stack trace del Exception) se anexan a su Raw
     $Script:FallaRecepLineas = 0     # contador de líneas de stack capturadas (tope 12)
     $UltimaTransfGUIHora = ""        # hora del último GUI Method TransferHandler/ConsultationHandler (PASO 4)
+    # Diccionario de Reason Codes (motivos de Auxiliar). Movido aquí (antes vivía solo en PASO 6/render) para
+    # que PASO 4 también pueda armar la etiqueta con nombre al capturar el clic de "Auxiliar con motivo"
+    # (ver $SlotAuxConMotivo más abajo — Opción B, Pablo 08/2026).
+    $DictRC = @{ "0"="DEFAULT"; "1"="COMIDA"; "2"="BAÑO"; "3"="LLAMADA SALIDA"; "4"="CAPACITACION"; "5"="SERVICIOS ESPECIALES"; "6"="COBRANZA"; "7"="SEGUIMIENTO"; "8"="RETRO"; "9"="SISTEMAS" }
+    # Slot ms protegido del botón "Auxiliar con motivo" (esquina superior izquierda): igual que ya existe para
+    # "Disponible" (EnterReadyHandler crea su propia fila con ms, inmune a que Avaya, en el MISMO segundo,
+    # dispare un parpadeo interno Ready→LoggedOut→Aux que contaminaba la fila de segundo compartida). Sin
+    # esto, un reason code real podía "perderse" si ese parpadeo caía en el mismo segundo (caso Pablo, AUX
+    # SISTEMAS/9, prueba controlada 28/08/2026).
+    $SlotAuxConMotivo = ""
+    $CodigoRCPendiente = ""
+    # Milisegundos absolutos de un slot "HH:mm:ss[,fff]" — copia adelantada de la que ya existe más abajo
+    # (línea ~2860), necesaria aquí porque PASO 4 corre ANTES de esa definición. Redefinirla allá abajo no
+    # rompe nada (misma lógica, reasignación idempotente).
+    $MsDeSlot = {
+        param($s)
+        if     ($s -match "^(\d{2}:\d{2}:\d{2}),(\d{1,3})$") { $hh = $matches[1]; $mm = [int]$matches[2] }
+        elseif ($s -match "^(\d{2}:\d{2}:\d{2})$")           { $hh = $matches[1]; $mm = 0 }
+        else { return -1 }
+        try { return [int]([datetime]::ParseExact($hh,"HH:mm:ss",$null).TimeOfDay.TotalSeconds) * 1000 + $mm } catch { return -1 }
+    }
+    # --- Auxiliar solicitado CON LLAMADA ACTIVA (estado "PendingAux" de Avaya) ---
+    # Si el asesor elige Auxiliar mientras sigue en llamada, Avaya no lo mete de inmediato: lo deja
+    # "PendingAux" y aplica el cambio real (LoggedOut→Aux) hasta que cuelga — normalmente varios segundos
+    # después, en un parpadeo oldState=PendingAux;newState=LoggedOut seguido de oldState=LoggedOut;newState=Aux
+    # en el mismo segundo. Antes esto NO se distinguía de un Auxiliar normal (Punto 2, Pablo 28/08/2026):
+    # $UltimoMotivoElegidoP4  = espejo de $UltimoMotivoElegido (que vive en PASO 6/render) pero disponible
+    #                           aquí en PASO 4, para poder etiquetar la finalización diferida con el motivo.
+    # $UltimoPendingAuxLogoutSlot = slot ms del "oldState=PendingAux;newState=LoggedOut" más reciente — la
+    #                           ventana (≤3s) para reconocer que el "LoggedOut→Aux" que sigue es la
+    #                           finalización diferida de ESE PendingAux, no un Aux nuevo sin relación.
+    $UltimoMotivoElegidoP4 = ""
+    $UltimoPendingAuxLogoutSlot = ""
+    $UltimoSlotAuxClicMs = ""   # slot ms del último "Asesor se cambia a Auxiliar... (Confirmado por clic)" — por si hay que reetiquetarlo a "pendiente"
     $GuiHoldSeg = @{}; $GuiUnholdSeg = @{}; $GuiEndSeg = @{}   # segundo del clic GUI (Hold/UnHold/EndCall) → sella "✓ clic confirmado" en el evento manual del EndpointLog
+    $TransfClicSeg   = @{}           # segundo (HH:mm:ss) del clic GUI "TransferCallHandler STARTED" → etiqueta "Asesor presiona botón Transferir" (distingue manual vs automática) y evita duplicar con OnRequestTransferSession
+    $EndTransferSeg  = @{}           # segundo (HH:mm:ss) de "End Executing method Transfer" (PASO 4/OneXAgent) → detecta retomado automático de la llamada tras fallo de transferencia
+    $LineaAppPorSeg  = @{}           # segundo (HH:mm:ss) → letra de call-appearance (a/b/c…) de MapCallAppToBtnIndex (PASO 5/EndpointLog) → número de línea en "Asesor abre línea N"
+    $HoldFalloSes    = @{}           # sesión → slot del fallo: hold que NO se pudo completar (HoldSessionCommand response null / VoiceInteraction_Hold failed) → relabela su "HOLD MANUAL" como fallido
+    $HoldMetodoSes   = @{}           # ConnId → LISTA de slots de "Begin Executing method Hold(...ConnId=N...)": hold que el asesor ejecuta por una vía (hotkey/CTI) que NO deja HoldCallHandler ni OnRequestHoldSession → distingue hold del AGENTE del auto-hold del SISTEMA (cambio de línea)
+    $AddCallSlots    = @()           # slots "HH:mm:ss,fff" del botón "Agregar llamada" (AddCallHandler): ese botón pone la llamada actual en AutoHold; el barrido reetiqueta ese hold cercano como "por Agregar llamada" (no es un clic de hold suelto)
+    $LineaAppBtn     = @{}           # buttonIndex (7,8,9…) → número de línea (1,2,3…), derivado de MapCallAppToBtnIndex(letra)
+    $ActiveLineSeq   = @()           # cronología de la línea activa: @{Ms;Btn} de "found activeLine: N" y <lineAppearanceId>N</lineAppearanceId>
+    # --- Caso "logeo autónomo": distinguir CIERRE NORMAL de CAÍDA DE RED + RECONEXIÓN AUTOMÁTICA ---
+    # (Cierre normal: requestor='manual' + closeSignalingChannel cat:0/cod:0 "closed by the application" + ExitHandler/Shutdown.
+    #  Caída+reconexión: closeSignalingChannel cat:2/cod:10060 + RASKeepaliveFailed + LinkRecoveryProgressEvent +
+    #  CompleteLoginRequest bLInkRecovery=1 + LoginAgent. El bLInkRecovery=1 prueba que la app estaba ABIERTA.)
+    # LISTAS (no un solo slot): un MISMO log puede contener VARIAS sesiones/cierres/caídas el mismo día
+    # (ej. Pablo probó un cierre normal y minutos después cerró con la X, sin borrar logs). Se colecta
+    # TODA ocurrencia y el barrido COLAPSA cada lista por episodios (por hueco de tiempo) → una fila por
+    # episodio. Antes se guardaba solo el PRIMER slot → el segundo cierre se perdía. Cada elemento: @{Slot;Raw}.
+    $CierreAppList      = @()        # cierres de app (Shutdown()/ExitHandler/PhoneService shutdown) — PASO 4
+    $DesfirmeManualList = @()        # Logoff requestor='manual' — PASO 5
+    $RedCaidaList       = @()        # caída de red (closeSignalingChannel cat≠0 / RASKeepaliveFailed) — PASO 5
+    $ReconIntentoList   = @()        # LinkRecoveryProgressEvent (recuperación en curso) — PASO 5
+    $ReconOkList        = @()        # CompleteLoginRequest ... bLInkRecovery=1 (reconexión automática) — PASO 5
+    $ReconRefirmaList   = @()        # LoginAgent()/AgentStateChanged LoggedOut→Aux tras recovery — PASO 4
+    # ThreadAbortException/"Subproceso anulado": ambiguo (ocurre en recuperación de red Y en teardown de cierre).
+    # Se interpreta en el barrido según haya o no un cierre de app cercano.
+    $HiloAbortadoList   = @()
+    # LÍNEA ABIERTA SIN MARCAR — confirmación DEFINITIVA del endpoint: al cerrar el historial de la sesión
+    # avisa "this record has no far-end address" = nunca hubo dirección de destino = jamás se marcó.
+    # Validado con 0 falsos positivos en los logs donde SÍ se marcó. Lista (no dict) porque los IDs de
+    # sesión se reciclan y hay que aparear cada apertura con SU cierre. — PASO 5
+    $SinDestinoFin      = @()        # @{Ses;Slot}
+    # Contrario a $SinDestinoFin: sesiones que SÍ resolvieron un número real (far-end address). Se usa para
+    # SUPRIMIR una fila "LÍNEA ABIERTA SIN MARCAR" preliminar cuando su sesión sí marcó (ej. destino de una
+    # transferencia cuya pata phantom se llevó el registro de consulta). @{Ses;Slot}, acotado por tiempo (IDs reciclan).
+    $FarEndResueltoSlots = @()
+    # Primer número REAL por sesión (PASO 5). Distingue una transferencia inter-agente REAL (la MISMA sesión
+    # cambia de número: del asesor originador al cliente) de un mismo cliente que vuelve a llamar (llamada
+    # nueva que nace directo con su número, sin cambio). El label "Número de cliente actualizado" solo debe
+    # salir cuando ESTA sesión cambió. Se libera en ProcessSessionEndedEvent (los IDs se reciclan).
+    $_PrimerFonoSes  = @{}
+    $_endHistSes = $null; $_endHistSlot = $null   # pendiente: sesión del EndHistoryRecord en curso
+    # CONTESTARON (saliente): instante en que la VoiceInteraction recibe la dirección del otro lado
+    # (= "me contestaron"), coincidente al ms con la transición interna Alerting→Active. Se captura en
+    # PASO 4 y el barrido post-PASO5 separa "Marcando/Timbrando" del "Contestaron". @{Vi;Cxt;Slot;Num}.
+    $ContestoSaliente   = @()
+    $RAvistoVI          = @{}         # "VIx|cxt" → $true: 1ª aparición de RemoteAddress por VI. La llave lleva el cxt (GUID único) porque los números de VI se reciclan en cada login
+    # Corroboración por EVENTO del "contestaron": el log debe mostrar la transición Alerting→Active en el
+    # mismo instante. Aparece SOLO cuando una llamada pasó de timbrando a activa (las aperturas de línea
+    # sin marcar nunca la generan). Se usa en vez de un umbral de segundos. Guarda slots "HH:mm:ss,fff".
+    $AlertingActivaSlots = @()
+    # Respaldo para SALIENTES INTERNAS (extensión a extensión): estas llamadas conectan directo
+    # (State=New→Active, SIN pasar por Alerting) porque no hay timbrado real que loguear — por eso
+    # nunca disparan ni el RemoteAddress= de $ContestoSaliente ni la corroboración Alerting→Active de
+    # $AlertingActivaSlots, y se quedan sin "(habló mm:ss)" en el FIN. sesión(ConnectionId) → primer
+    # slot "HH:mm:ss,fff" en que esa sesión llega a State=Active,InnerState=CONNECTED,Outgoing=True.
+    $ConexionActivaSaliente = @{}
+    # DISPONIBLE por botón favorito "AUTO IN": ese botón dispara un FAC (código de función) que la central
+    # marca como una saliente cortita (conecta al instante del Ready y se cuelga sola en ~4s). El botón
+    # "correcto" de Disponible usa la vía CTI/API y NO genera esa llamada. $FacAutoIn = el número del FAC
+    # (562 en esta central; cámbialo si otra sede usa otro código). $AutoInFacSlots = slots "HH:mm:ss,fff"
+    # donde se vio esa saliente al FAC; el render marca el "Disponible" cercano como "botón favorito AUTO-IN".
+    $FacAutoIn          = "562"
+    $AutoInFacSlots     = @()
+    # Ventanas del método Login() (registro de estación): durante ese registro Avaya crea una pata saliente
+    # VACÍA (RemoteParty=[,]) que nace y muere en ~1s, ANTES de que el agente esté firmado, y se cuela como
+    # "LÍNEA ABIERTA SIN MARCAR" + "¡EVASIÓN!". No es un abandono real (no se puede abandonar una línea sin
+    # estar firmado). $LoginWins = @{B;E} (slots "HH:mm:ss,fff" de Begin/End del Login()); el render suprime
+    # las filas "sin marcar"/EVASIÓN que caigan dentro. $_loginBeginSlot = Begin pendiente de cerrar.
+    $LoginWins          = @()
+    $_loginBeginSlot    = ""
+    # Lecturas de calidad de red (IspeacLog RTCP). NO crean filas propias (eso saturaba el timeline):
+    # se recolectan aquí y un barrido pre-render las ADJUNTA a las filas de evento YA EXISTENTES
+    # (la más cercana en el tiempo). $LossReadings = pérdida de paquetes (%), $RttReadings = lag ida/vuelta (ms).
+    $LossReadings       = @()   # @{Slot="HH:mm:ss,fff"; Pct}
+    $RttReadings        = @()   # @{Slot="HH:mm:ss,fff"; Rtt}
+    # "Cierre con asesor firmado": el cierre desfirmó a un agente que seguía FIRMADO. Señal = transición a
+    # LoggedOut (desde Ready/Aux/…) o EnterAuxHandler que ocurre AL/DESPUÉS del ExitHandler (el cierre la
+    # disparó). Si el desfirme fue ANTES del ExitHandler (menú Cerrar sesión) = cierre NORMAL. OJO: el botón X
+    # y el menú "Salir" son IDÉNTICOS en el log (ambos = ExitHandler); lo detectable es si el asesor estaba
+    # firmado al cerrar, NO el mecanismo. Y forceLogoff=true aparece en TODO cierre → no discrimina. — PASO 4
+    $CierreFirmadoList  = @()
     $ConnIdToSeñalSlot = @{}        # sessionId → ms-slot: señal creada por OldState=New,NewState=Alerting (PhoneService Alerting lo actualiza con Tel)
     $TransferEntranteOrigen = @{}    # CaId → @{Tel;Nombre;SlotReal}: posible ORIGEN de transferencia entrante (quien transfirió)
     $TransferEntranteConfirm = @{}   # CaId → $true: InBoundConsultTransferCompleted confirmó la transferencia entrante
@@ -399,12 +545,12 @@ $btnAnalizar.Add_Click({
     function Init-Hora ($hora) {
         if (-not $EventosTiempo.ContainsKey($hora)) {
             $EventosTiempo[$hora] = @{
-                Interpretacion=""; Agente=""; Audio=""; Aux=""; Ispeac=""; SysLog=""; AppLog=""
-                RawInterpretacion=""; RawAgente=""; RawAudio=""; RawAux=""; RawIspeac=""; RawSysLog=""; RawAppLog=""
+                Interpretacion=""; Agente=""; Audio=""; Aux=""; Ispeac=""; SysLog=""; AppLog=""; Dtmf=""
+                RawInterpretacion=""; RawAgente=""; RawAudio=""; RawAux=""; RawIspeac=""; RawSysLog=""; RawAppLog=""; RawDtmf=""
                 Sesion="-"; Tel="-"; ViId=""; Topic=""
                 ColorInterpretacion=[System.Drawing.Color]::White; ColorAgente=[System.Drawing.Color]::White
                 ColorAudio=[System.Drawing.Color]::White; ColorAux=[System.Drawing.Color]::White
-                ColorIspeac=[System.Drawing.Color]::White; ColorSys=[System.Drawing.Color]::White; ColorApp=[System.Drawing.Color]::White
+                ColorIspeac=[System.Drawing.Color]::White; ColorSys=[System.Drawing.Color]::White; ColorApp=[System.Drawing.Color]::White; ColorDtmf=[System.Drawing.Color]::White
             }
         }
     }
@@ -640,10 +786,23 @@ $btnAnalizar.Add_Click({
                     $LineasI = Get-Content -Path $ArchivoI.FullName -Encoding UTF8 -ReadCount 0 -EA SilentlyContinue
                     if (-not $LineasI) { continue }
                     foreach ($linea in $LineasI) {
-                        if ($linea -match "^\[$FechaOmni\s+(\d{2}:\d{2}:\d{2}):\d{3}\]") {
-                            $HoraLimpia = $matches[1]; Init-Hora $HoraLimpia
-                            if ($linea -match "FRACTION DROPPED = (0\.[1-9]\d+|[1-9]\.\d+)") { $EventosTiempo[$HoraLimpia].Ispeac = "¡ALERTA RED! Pérdida de paquetes ($($matches[1]))"; $EventosTiempo[$HoraLimpia].ColorIspeac = [System.Drawing.Color]::OrangeRed; $EventosTiempo[$HoraLimpia].RawIspeac += "$linea`n" }
-                            elseif ($linea -match "RECEIVED RTCP ROUND TRIP DELAY = (\d{3,}\.\d+)") { $EventosTiempo[$HoraLimpia].Ispeac = "¡ALERTA RED! Lag crítico ($($matches[1]) ms)"; $EventosTiempo[$HoraLimpia].ColorIspeac = [System.Drawing.Color]::OrangeRed; $EventosTiempo[$HoraLimpia].RawIspeac += "$linea`n" }
+                        # Se CAPTURA la hora CON milisegundos (…:fff) y se recolecta la lectura, SIN crear slot
+                        # (antes cada lectura RTCP hacía su propia fila y saturaba). Un barrido pre-render las
+                        # adjunta a las filas de evento ya existentes. Parse InvariantCulture: el SO es es-MX
+                        # (separador decimal ','), un [double] normal malinterpretaría "1.007080".
+                        if ($linea -match "^\[$FechaOmni\s+(\d{2}:\d{2}:\d{2}):(\d{3})\]") {
+                            $hI = $matches[1]; $msI = $matches[2]
+                            # Buscador de vacíos: registra CUALQUIER línea de Ispeac (proceso independiente
+                            # de OneXAgent.exe), para saber si seguía vivo durante un vacío del proceso principal.
+                            if ($hI -match '^(\d{2}):(\d{2}):(\d{2})$') { $Script:TsIspeac.Add(([int64]$matches[1])*3600000L + ([int64]$matches[2])*60000L + ([int64]$matches[3])*1000L + [int64]$msI) }
+                            if ($linea -match "FRACTION DROPPED = ([\d.]+)") {
+                                $vFrac = [double]::Parse($matches[1], [System.Globalization.CultureInfo]::InvariantCulture)
+                                $LossReadings += [pscustomobject]@{ Slot = "$hI,$msI"; Pct = [math]::Round($vFrac * 100, 1); Raw = $linea }
+                            }
+                            elseif ($linea -match "RECEIVED RTCP ROUND TRIP DELAY = ([\d.]+)") {
+                                $vRtt = [double]::Parse($matches[1], [System.Globalization.CultureInfo]::InvariantCulture)
+                                $RttReadings += [pscustomobject]@{ Slot = "$hI,$msI"; Rtt = [math]::Round($vRtt, 1); Raw = $linea }
+                            }
                         }
                     }
                 }
@@ -708,10 +867,132 @@ $btnAnalizar.Add_Click({
                 foreach ($ArchivoX in $ArchivosOneX) {
                     $LineasX = Get-Content -Path $ArchivoX.FullName -Encoding UTF8 -ReadCount 0 -EA SilentlyContinue
                     if (-not $LineasX) { continue }
-                    $HoraLimpia = ""; $MsLimpio = "000"
+                    $HoraLimpia = ""; $MsLimpio = "000"; $_loginBeginSlot = ""
                     foreach ($linea in $LineasX) {
                         if ($linea -match "^\[?$FechaOmni.*?(\d{2}:\d{2}:\d{2})(?:,(\d{3}))?") {
                             $HoraLimpia = $matches[1]; $MsLimpio = if ($matches[2]) { $matches[2] } else { "000" }
+                            # Buscador de vacíos: registra CUALQUIER línea con timestamp (AvayaOneX.log), sea o
+                            # no relevante para el timeline — el punto es medir el "pulso" real del proceso.
+                            if ($HoraLimpia -match '^(\d{2}):(\d{2}):(\d{2})$') { $Script:TsProceso.Add(([int64]$matches[1])*3600000L + ([int64]$matches[2])*60000L + ([int64]$matches[3])*1000L + [int64]$MsLimpio) }
+
+                            # --- Auxiliar solicitado CON LLAMADA ACTIVA: estado "PendingAux" (Punto 2, Pablo 28/08/2026) ---
+                            # Independiente de la cadena elseif de abajo (igual que el contador de vacíos arriba):
+                            # necesita ver TODAS las líneas relevantes, no solo la que "gane" la clasificación de esa línea.
+                            if ($linea -match "(?i)newState\s*=\s*PendingAux" -and $UltimoSlotAuxClicMs -ne "") {
+                                # Confirma que el clic de hace un momento (EnterAuxWithReasonCodeHandler ENDED) NO se
+                                # aplicó de inmediato — reetiquetar esa fila de "confirmado" a "pendiente".
+                                if ($EventosTiempo.ContainsKey($UltimoSlotAuxClicMs) -and $EventosTiempo[$UltimoSlotAuxClicMs].Interpretacion -match "\(Confirmado por clic\)$") {
+                                    $EventosTiempo[$UltimoSlotAuxClicMs].Interpretacion = $EventosTiempo[$UltimoSlotAuxClicMs].Interpretacion -replace "\(Confirmado por clic\)$", "(clic registrado — pendiente, la llamada seguía activa)"
+                                    $EventosTiempo[$UltimoSlotAuxClicMs].RawInterpretacion += "[PENDINGAUX] $linea`n"
+                                }
+                                $UltimoSlotAuxClicMs = ""   # ya reetiquetado, no repetir en próximas líneas PendingAux del mismo tramo
+                            }
+                            elseif ($linea -match "(?i)newState\s*=\s*PendingAux") {
+                                # TrabAux (botón favorito) elegido CON llamada activa: a diferencia del botón de la
+                                # esquina superior, este NUNCA pasa por EnterAuxWithReasonCodeHandler ni deja un
+                                # "Enter Aux;code=..." — solo "aux-work Button transitioned...to wink" seguido
+                                # directo de newState=PendingAux. Sin este bloque, el clic no dejaba NINGÚN rastro
+                                # visible (ni siquiera al colgar se sabía que fue un clic real en ese instante) —
+                                # reportado por Pablo, log LogsAvaya-172.18.224.150_183848_a_184126_28082026.csv.
+                                $SlotAuxFavPend = "$HoraLimpia,$MsLimpio"
+                                Init-Hora $SlotAuxFavPend
+                                if ($EventosTiempo[$SlotAuxFavPend].Interpretacion -eq "") {
+                                    # Ronda siguiente (Pablo): se quita el "Detectado [X]" — un caso real mostró que
+                                    # la inferencia (último motivo elegido) puede no coincidir con lo que Avaya CMS
+                                    # aplicó de verdad. Solo se reporta el hecho, sin adivinar el motivo.
+                                    $EventosTiempo[$SlotAuxFavPend].Interpretacion      = "Asesor se cambia a Auxiliar — se detectó un auxiliar sin código (clic registrado — pendiente, la llamada seguía activa)"
+                                    $EventosTiempo[$SlotAuxFavPend].ColorInterpretacion = [System.Drawing.Color]::Orange
+                                    $EventosTiempo[$SlotAuxFavPend].RawInterpretacion  += "[PENDINGAUX-FAVORITO] $linea`n"
+                                }
+                            }
+                            if ($linea -match "(?i)oldState\s*=\s*PendingAux\s*;\s*newState\s*=\s*LoggedOut") {
+                                $UltimoPendingAuxLogoutSlot = "$HoraLimpia,$MsLimpio"
+                            }
+                            if ($linea -match "(?i)oldState\s*=\s*LoggedOut\s*;\s*newState\s*=\s*Aux" -and $UltimoPendingAuxLogoutSlot -ne "") {
+                                $msPend = & $MsDeSlot $UltimoPendingAuxLogoutSlot
+                                $msNow  = & $MsDeSlot "$HoraLimpia,$MsLimpio"
+                                if ($msPend -ge 0 -and $msNow -ge 0 -and ($msNow - $msPend) -ge 0 -and ($msNow - $msPend) -le 3000) {
+                                    # Esta es la finalización REAL, diferida, del Auxiliar que se pidió durante la
+                                    # llamada — dale su propia fila ms (en vez de la fila de segundo compartida) para
+                                    # que ordene bien contra el FIN DE LLAMADA que la disparó (Punto 3, mismo caso).
+                                    $SlotAuxDiferido = "$HoraLimpia,$MsLimpio"
+                                    Init-Hora $SlotAuxDiferido
+                                    if ($EventosTiempo[$SlotAuxDiferido].Interpretacion -eq "") {
+                                        $NombreDif = if ($UltimoMotivoElegidoP4 -ne "" -and $DictRC.ContainsKey($UltimoMotivoElegidoP4)) { $DictRC[$UltimoMotivoElegidoP4] } else { "" }
+                                        # Pablo (ronda siguiente): "(solicitud pendiente aplicada al colgar)" sonaba
+                                        # poco firme. Cambiado a "Auxiliar pendiente aplicado [X]" — más directo.
+                                        # OJO: el dedup del render busca este texto ("Auxiliar pendiente aplicado")
+                                        # para reconocer esta fila como hermana ms y no duplicar el evento en la
+                                        # fila de segundo compartido — si se vuelve a cambiar la redacción, actualizar
+                                        # también esa búsqueda (~línea con "se cambia a Auxiliar|se cambia a Default").
+                                        $EventosTiempo[$SlotAuxDiferido].Interpretacion      = if ($NombreDif -ne "") { "Auxiliar pendiente aplicado [$NombreDif]" } else { "Auxiliar pendiente aplicado" }
+                                        $EventosTiempo[$SlotAuxDiferido].ColorInterpretacion = [System.Drawing.Color]::Orange
+                                        $EventosTiempo[$SlotAuxDiferido].RawInterpretacion  += "[PENDINGAUX->AUX] $linea`n"
+                                    }
+                                }
+                                $UltimoPendingAuxLogoutSlot = ""   # consumida, no reusar en próximas líneas
+                            }
+
+                            # --- Caso "logeo autónomo": señales de PASO 4 (captura, se emiten en barrido post-PASO5) ---
+                            # Independiente de la cadena elseif de abajo: solo guarda slots, no pinta filas aquí.
+                            # Cierre de la app (clic en la X / apagado del OneX):
+                            if ($linea -match "GUI Method (?:STARTED|ENDED): ExitHandler" -or $linea -match "Begin Executing method Shutdown\(\)" -or $linea -match "PhoneService shutdown") {
+                                # Tipo: "inicio" = clic de cerrar (puede repetirse si la app está colgada);
+                                #       "fin"    = apagado definitivo (aquí termina el episodio de cierre).
+                                $tipoC = if ($linea -match "PhoneService shutdown" -or $linea -match "Begin Executing method Shutdown\(\)") { "fin" }
+                                         elseif ($linea -match "GUI Method STARTED: ExitHandler") { "inicio" } else { "otro" }
+                                $CierreAppList += [pscustomobject]@{ Slot = "$HoraLimpia,$MsLimpio"; Raw = $linea; Tipo = $tipoC }
+                            }
+                            # Re-firma automática tras recuperación (solo se USA si hay bLInkRecovery=1 cercano; ver barrido):
+                            if ($linea -match "Begin Executing method LoginAgent\(" -or $linea -match "AgentStateChanged:\s*oldState=LoggedOut;\s*newState=Aux") {
+                                $ReconRefirmaList += [pscustomobject]@{ Slot = "$HoraLimpia,$MsLimpio"; Raw = $linea }
+                            }
+                            # Señales de "asesor firmado al cerrar": EnterAuxHandler (la app lo parquea) o una transición
+                            # a LoggedOut desde un estado activo. En el barrido se exige que ocurran AL/DESPUÉS del cierre
+                            # (si el desfirme fue antes = menú Cerrar sesión = cierre normal).
+                            if ($linea -match "GUI Method STARTED: EnterAuxHandler" -or ($linea -match "AgentStateChanged:\s*oldState=(\w+);\s*newState=LoggedOut" -and $matches[1] -ne "LoggedOut")) {
+                                $CierreFirmadoList += [pscustomobject]@{ Slot = "$HoraLimpia,$MsLimpio"; Raw = $linea }
+                            }
+                            # CONTESTARON (saliente): la VoiceInteraction recibe la dirección del otro lado =
+                            # el instante en que "me contestaron". Coincide al ms con Alerting→Active. Solo la
+                            # PRIMERA vez por VI (luego re-loguea). El barrido post-PASO5 lo separa del marcado.
+                            if ($linea -match "VoiceInteractionImpl\[(VI\d+):[0-9a-fA-F\-]+,cxt=([0-9a-fA-F\-]{36})\]\.RemoteAddress=(\d{3,})") {
+                                $viRA = $matches[1]; $cxtRA = $matches[2]; $numRA = $matches[3]
+                                # La llave DEBE incluir el cxt (GUID de la llamada, único e irrepetible): los
+                                # números de VoiceInteraction (VI3, VI6…) REINICIAN en cada login, así que
+                                # keyear solo por VI hacía que un "VI3" de la mañana (p.ej. el marcado FAC de
+                                # firma) descartara el "VI3" real de la tarde y esa llamada se quedara sin
+                                # su fila "Contestaron".
+                                $claveRA = "$viRA|$cxtRA"
+                                if (-not $RAvistoVI.ContainsKey($claveRA)) {
+                                    $RAvistoVI[$claveRA] = $true
+                                    $ContestoSaliente += [pscustomobject]@{ Vi = $viRA; Cxt = $cxtRA; Slot = "$HoraLimpia,$MsLimpio"; Num = $numRA }
+                                }
+                            }
+                            # Señal de corroboración: la llamada pasó de timbrando a activa (= contestaron de verdad).
+                            if ($linea -match "CheckScreenPop_impl\(\):\s*previousState = Alerting;\s*currentState = Active") {
+                                $AlertingActivaSlots += "$HoraLimpia,$MsLimpio"
+                            }
+                            # Respaldo saliente interna: "Call updated : Id=X,...,State=Active,InnerState=CONNECTED,...Outgoing=True"
+                            # (sin fase de Alerting previa en el log). Solo se guarda la 1ª vez por sesión.
+                            if ($linea -match "Call updated\s*:\s*Id=(\d+),.*State=Active,InnerState=CONNECTED.*Outgoing=True") {
+                                $sesCA = $matches[1]
+                                if (-not $ConexionActivaSaliente.ContainsKey($sesCA)) { $ConexionActivaSaliente[$sesCA] = "$HoraLimpia,$MsLimpio" }
+                            }
+                            # FAC del botón favorito AUTO-IN: saliente al $FacAutoIn (RemoteParty=[562,]Outgoing=True).
+                            # Registra su slot para que el render marque el "Disponible" cercano como "botón favorito".
+                            if ($linea -match ("RemoteParty=\[" + [regex]::Escape($FacAutoIn) + ",\]Outgoing=True")) {
+                                $AutoInFacSlots += "$HoraLimpia,$MsLimpio"
+                            }
+                            # Ventana del método Login() (registro de estación). OJO: "Login(?!Agent)" excluye el
+                            # LoginAgent (firma real, que va después). El End cierra la ventana; si faltara, el
+                            # Begin del LoginAgent la cierra como red de seguridad (siempre ocurre tras el Login()).
+                            if ($linea -match "Begin Executing method Login(?!Agent)") {
+                                $_loginBeginSlot = "$HoraLimpia,$MsLimpio"
+                            }
+                            elseif ($linea -match "End Executing method Login(?!Agent)|Begin Executing method LoginAgent") {
+                                if ($_loginBeginSlot -ne "") { $LoginWins += [pscustomobject]@{ B = $_loginBeginSlot; E = "$HoraLimpia,$MsLimpio" }; $_loginBeginSlot = "" }
+                            }
 
                             # --- Diadema desconectada ---
                             if ($linea -match "(?i)(DeviceRemoved|Audio device removed|Hardware removed|RemoveDevice)") {
@@ -747,7 +1028,7 @@ $btnAnalizar.Add_Click({
                                 $SlotAutoIn = "$HoraLimpia,$MsLimpio"
                                 Init-Hora $SlotAutoIn
                                 if ($EventosTiempo[$SlotAutoIn].Interpretacion -eq "") {
-                                    $EventosTiempo[$SlotAutoIn].Interpretacion      = "Asesor se cambia a Disponible (Auto-In)"
+                                    $EventosTiempo[$SlotAutoIn].Interpretacion      = "Asesor se cambia a Disponible usando botón favorito"
                                     $EventosTiempo[$SlotAutoIn].ColorInterpretacion = [System.Drawing.Color]::Yellow
                                     $EventosTiempo[$SlotAutoIn].RawInterpretacion  += "$linea`n"
                                 }
@@ -773,14 +1054,43 @@ $btnAnalizar.Add_Click({
                             }
                             elseif ($linea -match "GUI Method (STARTED|ENDED): EnterAuxWithReasonCodeHandler") {
                                 Init-Hora $HoraLimpia
-                                if ($matches[1] -eq "ENDED") { $EventosTiempo[$HoraLimpia].Aux += "GUI_AUX_CONFIRMADO|" }
+                                if ($matches[1] -eq "STARTED") {
+                                    # Opción B: abrir la ventana + crear su propia fila ms, igual que EnterReadyHandler
+                                    # ya hace con "Disponible" — inmune a que un parpadeo de estado en el mismo
+                                    # segundo (ver Opción A arriba) contamine la fila y se pierda el reason code.
+                                    $SlotAuxConMotivo = "$HoraLimpia,$MsLimpio"; $CodigoRCPendiente = ""
+                                    Init-Hora $SlotAuxConMotivo
+                                } else {
+                                    $EventosTiempo[$HoraLimpia].Aux += "GUI_AUX_CONFIRMADO|"
+                                    if ($SlotAuxConMotivo -ne "" -and $CodigoRCPendiente -ne "") {
+                                        $NombreRCSlot = if ($DictRC.ContainsKey($CodigoRCPendiente)) { $DictRC[$CodigoRCPendiente] } else { $CodigoRCPendiente }
+                                        if ($EventosTiempo[$SlotAuxConMotivo].Interpretacion -eq "") {
+                                            $EventosTiempo[$SlotAuxConMotivo].Interpretacion      = if ($CodigoRCPendiente -eq "0") { "Asesor se cambia a Default (Confirmado por clic)" } else { "Asesor se cambia a Auxiliar [$NombreRCSlot] (Confirmado por clic)" }
+                                            $EventosTiempo[$SlotAuxConMotivo].ColorInterpretacion = [System.Drawing.Color]::Orange
+                                            $EventosTiempo[$SlotAuxConMotivo].RawInterpretacion  += "[CONFIRMADO POR CLIC] EnterAuxWithReasonCodeHandler + code=$CodigoRCPendiente ($NombreRCSlot)`n"
+                                        }
+                                        if ($CodigoRCPendiente -ne "0") { $UltimoMotivoElegidoP4 = $CodigoRCPendiente }
+                                        # Punto 2 (Pablo, 28/08/2026): si la llamada seguía activa, Avaya NO aplica el
+                                        # cambio de inmediato — lo deja "PendingAux" (se detecta unas líneas después,
+                                        # ver el "if" independiente más abajo). Se recuerda esta fila para poder
+                                        # reetiquetarla de "(Confirmado por clic)" a "(clic registrado — pendiente,
+                                        # la llamada seguía activa)" si de verdad resulta ser el caso.
+                                        $UltimoSlotAuxClicMs = $SlotAuxConMotivo
+                                    }
+                                    # Cerrar la ventana siempre (con o sin código encontrado) para no arrastrarla a
+                                    # un próximo EnterAux suelto que no venga de este clic.
+                                    $SlotAuxConMotivo = ""; $CodigoRCPendiente = ""
+                                }
                                 $EventosTiempo[$HoraLimpia].RawAux += "$linea`n"
                             }
-                            elseif ($linea -match "(?i)GUI Method (?:STARTED|ENDED): (?:TransferCallHandler|TransferHandler|ConsultationHandler|CompleteTransferHandler)") {
+                            elseif ($linea -match "(?i)GUI Method (STARTED|ENDED): (?:TransferCallHandler|TransferHandler|ConsultationHandler|CompleteTransferHandler)") {
                                 # TransferCallHandler = el clic real del asesor en "Transferir" (log moderno).
                                 # Capturarlo es clave: alimenta $UltimaTransfGUIHora, que distingue transferencia
                                 # MANUAL (con GUI) de AUTOMÁTICA (sin GUI) en OnRequestTransferSession (~1848).
                                 $UltimaTransfGUIHora = $HoraLimpia
+                                # Segundo del clic (solo STARTED): la fila visible "Asesor presiona botón Transferir"
+                                # se pinta en PASO 5 cuando OnRequestTransferSession cae en este mismo segundo.
+                                if ($matches[1] -eq "STARTED") { $TransfClicSeg[$HoraLimpia] = $true }
                                 Init-Hora $HoraLimpia
                                 $EventosTiempo[$HoraLimpia].RawAux += "$linea`n"
                             }
@@ -794,6 +1104,7 @@ $btnAnalizar.Add_Click({
                                         $EventosTiempo[$SlotAdd].ColorAgente = [System.Drawing.Color]::MediumOrchid
                                     }
                                     $EventosTiempo[$SlotAdd].RawAgente += "$linea`n"
+                                    $AddCallSlots += $SlotAdd   # para reetiquetar el AutoHold que dispara este botón
                                 }
                                 Init-Hora $HoraLimpia; $EventosTiempo[$HoraLimpia].RawAux += "$linea`n"
                             }
@@ -803,9 +1114,12 @@ $btnAnalizar.Add_Click({
                                     $SlotNew = "$HoraLimpia,$MsLimpio"
                                     Init-Hora $SlotNew
                                     if ($EventosTiempo[$SlotNew].Agente -eq "") {
-                                        $EventosTiempo[$SlotNew].Agente      = "$symUp El asesor inició una llamada nueva"
+                                        $EventosTiempo[$SlotNew].Agente      = "$symUp Asesor captura número y da Enter"
                                         $EventosTiempo[$SlotNew].ColorAgente = [System.Drawing.Color]::LightSkyBlue
                                     }
+                                    # Guardar el slot para, tras PASO 5, inyectar el número tecleado
+                                    # (ApplyDialingRulesToNumber llega ~ms después en el EndpointLog).
+                                    $NewCallSlots += $SlotNew
                                     $EventosTiempo[$SlotNew].RawAgente += "$linea`n"
                                 }
                                 Init-Hora $HoraLimpia; $EventosTiempo[$HoraLimpia].RawAux += "$linea`n"
@@ -822,6 +1136,15 @@ $btnAnalizar.Add_Click({
                                     }
                                 }
                                 Init-Hora $HoraLimpia; $EventosTiempo[$HoraLimpia].RawAgente += "$linea`n"
+                            }
+                            # --- Hold ejecutado por método directo (hotkey/CTI): "Begin Executing method Hold(...ConnId=N...)".
+                            #     No pasa por HoldCallHandler ni OnRequestHoldSession, así que el detector normal no lo ve.
+                            #     Se registra por ConnId+slot para distinguir, en el sweep de hold implícito, un hold del
+                            #     ASESOR de un auto-hold del sistema (abrir 2da línea, que NO genera este método). ---
+                            elseif ($linea -match "Begin Executing method Hold\(Call\[Id=[0-9a-fA-F\-]+,ConnId=(\d+)") {
+                                $cHM = $matches[1]
+                                if (-not $HoldMetodoSes.ContainsKey($cHM)) { $HoldMetodoSes[$cHM] = @() }
+                                $HoldMetodoSes[$cHM] += "$HoraLimpia,$MsLimpio"
                             }
                             elseif ($linea -match "GUI Method (STARTED|ENDED): ConferenceCallDragDropHandler") {
                                 $SlotDD = "$HoraLimpia,$MsLimpio"
@@ -858,13 +1181,27 @@ $btnAnalizar.Add_Click({
                             elseif ($linea -match "(?i)WorkServiceImpl EnterAux:session=.*?;code=(\d+)") {
                                 Init-Hora $HoraLimpia; $Rc = $matches[1]
                                 $EventosTiempo[$HoraLimpia].Aux += "NUEVO_RC:$Rc|"; $EventosTiempo[$HoraLimpia].RawAux += "$linea`n"
+                                # Opción B: si este código llegó DENTRO de la ventana de un clic de "Auxiliar con
+                                # motivo" (EnterAuxWithReasonCodeHandler STARTED..ENDED), recordarlo para armar la
+                                # fila ms protegida al cerrar esa ventana (ver más abajo).
+                                if ($SlotAuxConMotivo -ne "") { $CodigoRCPendiente = $Rc }
                             }
                             elseif ($linea -match "(?i)ReasonCode[=\[>:\s]*(\d+)") {
                                 Init-Hora $HoraLimpia; $Rc = $matches[1]
                                 if ($Rc -eq "0") { $EventosTiempo[$HoraLimpia].Aux += "DEFAULT|" } elseif ($Rc -eq "10") { $EventosTiempo[$HoraLimpia].Aux += "SISTEMA_LOGOUT|" } else { $EventosTiempo[$HoraLimpia].Aux += "RC: $Rc|" }
                                 $EventosTiempo[$HoraLimpia].RawAux += "$linea`n"
+                                if ($SlotAuxConMotivo -ne "") { $CodigoRCPendiente = $Rc }
                             }
-                            elseif ($linea -match "(?i)(?:UpdateSessionState:\s*Agent State\s*|AgentState:\s*|State\s*[:=]\s*|Enter\s+)(AuxWork|Aux|Ready|AutoIn|ManualIn|NotReady|Default|LoggedOut|PendingAux)") {
+                            # Estado genérico del agente (respaldo). OJO: usa (?<!old) para que "oldState=X;newState=Y"
+                            # SIEMPRE capture Y (el estado NUEVO), nunca X — antes, como -match toma la PRIMERA
+                            # coincidencia y "oldState=" aparece textualmente ANTES que "newState=" en la misma línea,
+                            # esta regla capturaba el estado VIEJO. Avaya a veces dispara un parpadeo interno real
+                            # (ej. Ready→LoggedOut→Aux en <20ms, todo en el mismo segundo) al cambiar de Auxiliar con
+                            # motivo desde la esquina superior izquierda; con la captura vieja, ese parpadeo generaba
+                            # un "ESTADO: READY|" falso que en el render (rama "ESTADO: READY") ganaba por orden de
+                            # prioridad y borraba el reason code real ya capturado en la MISMA fila (caso Pablo, AUX
+                            # SISTEMAS/9 desaparecido, prueba controlada 28/08/2026). Opción A. Pablo, 08/2026.
+                            elseif ($linea -match "(?i)(?:UpdateSessionState:\s*Agent State\s*|AgentState:\s*|(?<!old)State\s*[:=]\s*|Enter\s+)(AuxWork|Aux|Ready|AutoIn|ManualIn|NotReady|Default|LoggedOut|PendingAux)") {
                                 Init-Hora $HoraLimpia
                                 $EventosTiempo[$HoraLimpia].Aux += "ESTADO: $($matches[1].ToUpper())|"
                                 $EventosTiempo[$HoraLimpia].RawAux += "$linea`n"
@@ -872,18 +1209,26 @@ $btnAnalizar.Add_Click({
                             # --- Call created: registra dirección; detecta sesiones bridge del sistema (Signal A) ---
                             elseif ($linea -match "(?i)(?:PhoneService_CallCreated:call=|Call created : )Id=(\d+).*?Outgoing=(True|False)") {
                                 $IDLlamada = $matches[1]; $Sentido = $matches[2]
+                                # Instante en que NACE una llamada: el sweep de apertura de línea lo usa para saber
+                                # si el clic abrió una línea nueva o solo cambió a una que ya tenía llamada.
+                                try { $CallCreatedMs += ([int]([datetime]::ParseExact($HoraLimpia,"HH:mm:ss",$null).TimeOfDay.TotalSeconds) * 1000 + [int]$MsLimpio) } catch {}
                                 if ($Sentido -eq "True" -and $linea -match "RemoteParty=\[,\]") {
                                     # Signal A: sesión bridge/phantom — Avaya CM crea una llamada saliente sin destino real
                                     # para ejecutar una transferencia automática; produce tono de ringback audible.
+                                    # UNA sola fila por sesión: Avaya loguea la creación DOS veces ("Call created :" y
+                                    # "PhoneService_CallCreated:call="). Si caen en ms distintos se creaban dos filas y el
+                                    # retract (que guarda un solo $BridgeSlot) limpiaba solo la última → falso positivo.
                                     $SesionesBridge[$IDLlamada] = $HoraLimpia
                                     $DirLlamada[$IDLlamada] = "BRIDGE"
-                                    $SlotB = "$HoraLimpia,$MsLimpio"
-                                    $BridgeSlot[$IDLlamada] = $SlotB
-                                    Init-Hora $SlotB
-                                    $EventosTiempo[$SlotB].Sesion = $IDLlamada
-                                    $EventosTiempo[$SlotB].Interpretacion = "[!] Sesión bridge del sistema (auto-transferencia)"
-                                    $EventosTiempo[$SlotB].ColorInterpretacion = [System.Drawing.Color]::Orange
-                                    $EventosTiempo[$SlotB].RawInterpretacion += "$linea`n"
+                                    if (-not $BridgeSlot.ContainsKey($IDLlamada)) {
+                                        $SlotB = "$HoraLimpia,$MsLimpio"
+                                        $BridgeSlot[$IDLlamada] = $SlotB
+                                        Init-Hora $SlotB
+                                        $EventosTiempo[$SlotB].Sesion = $IDLlamada
+                                        $EventosTiempo[$SlotB].Interpretacion = "[!] Sesión bridge del sistema (auto-transferencia)"
+                                        $EventosTiempo[$SlotB].ColorInterpretacion = [System.Drawing.Color]::Orange
+                                    }
+                                    $EventosTiempo[$BridgeSlot[$IDLlamada]].RawInterpretacion += "$linea`n"
                                 } else {
                                     if ($Sentido -eq "True") { $DirLlamada[$IDLlamada] = "SALIENTE" } else { $DirLlamada[$IDLlamada] = "ENTRANTE" }
                                 }
@@ -1365,14 +1710,18 @@ $btnAnalizar.Add_Click({
                                 $BridgeId = $matches[1]
                                 $SesionesBridge[$BridgeId] = $HoraLimpia
                                 $DirLlamada[$BridgeId] = "BRIDGE"
-                                $SlotBridge = "$HoraLimpia,$MsLimpio"
-                                Init-Hora $SlotBridge
-                                $EventosTiempo[$SlotBridge].Sesion = $BridgeId
-                                if ($EventosTiempo[$SlotBridge].Interpretacion -eq "") {
-                                    $EventosTiempo[$SlotBridge].Interpretacion = "[!] Sesión bridge del sistema (auto-transferencia)"
-                                    $EventosTiempo[$SlotBridge].ColorInterpretacion = [System.Drawing.Color]::Orange
+                                # Una sola fila por sesión; se registra $BridgeSlot para que el retract la pueda limpiar.
+                                if (-not $BridgeSlot.ContainsKey($BridgeId)) {
+                                    $SlotBridge = "$HoraLimpia,$MsLimpio"
+                                    $BridgeSlot[$BridgeId] = $SlotBridge
+                                    Init-Hora $SlotBridge
+                                    $EventosTiempo[$SlotBridge].Sesion = $BridgeId
+                                    if ($EventosTiempo[$SlotBridge].Interpretacion -eq "") {
+                                        $EventosTiempo[$SlotBridge].Interpretacion = "[!] Sesión bridge del sistema (auto-transferencia)"
+                                        $EventosTiempo[$SlotBridge].ColorInterpretacion = [System.Drawing.Color]::Orange
+                                    }
                                 }
-                                $EventosTiempo[$SlotBridge].RawInterpretacion += "$linea`n"
+                                $EventosTiempo[$BridgeSlot[$BridgeId]].RawInterpretacion += "$linea`n"
                             }
                             # --- SECONDARY CONNECTED: InnerState=CONNECTED (usa ID numérico, sin UUID) ---
                             # Fallback por si type=Active no apareció. Guarda RemoteParty y previene duplicados.
@@ -1467,15 +1816,38 @@ $btnAnalizar.Add_Click({
                                 $EventosTiempo[$SlotPress].ColorAgente = [System.Drawing.Color]::LightSkyBlue
                                 $EventosTiempo[$SlotPress].RawAgente  += "$linea`n"
                             }
+                            # --- FIN DEL HANDLER DE TRANSFERENCIA: marca el segundo en que el Transfer termina ---
+                            # Si la transferencia falló, el sistema retoma la llamada original con un
+                            # PressLineAppearance en este mismo segundo. El sweep post-PASO5 usa esto para
+                            # NO confundir ese retomado automático con una apertura de línea manual del asesor.
+                            elseif ($linea -match "End Executing method Transfer\b") {
+                                $EndTransferSeg[$HoraLimpia] = $true
+                            }
                             # --- HOLD IMPLÍCITO: OldState=Active,NewState=Inactive sin clic de Hold ---
                             # Avaya retiene automáticamente la llamada activa cuando el agente abre
                             # una segunda línea. Si EndpointLog no tiene OnRequestHoldSession para esta
                             # sesión, el sweep post-PASO5 añadirá "Hold automático del sistema".
                             elseif ($linea -match "Call StateChanged Call\[Id=[0-9a-fA-F\-]+,ConnectionId=(\d+),OldState=Active,NewState=Inactive\]") {
                                 $SesH = $matches[1]
-                                if (-not $HoldImplicito.ContainsKey($SesH)) {
-                                    Init-Hora $HoraLimpia
-                                    $HoldImplicito[$SesH] = $HoraLimpia
+                                # LISTA de slots (antes solo el primero): navegando entre líneas la MISMA llamada se
+                                # retiene varias veces y solo se pintaba el primer hold.
+                                if (-not $HoldImplicito.ContainsKey($SesH)) { $HoldImplicito[$SesH] = @() }
+                                $SlotHoldImp = "$HoraLimpia,$MsLimpio"
+                                if ($HoldImplicito[$SesH] -notcontains $SlotHoldImp) {
+                                    Init-Hora $SlotHoldImp
+                                    $HoldImplicito[$SesH] += $SlotHoldImp
+                                }
+                            }
+                            # --- RETOMAR: OldState=Inactive,NewState=Active = la llamada sale del hold ---
+                            # Ocurre al volver a una línea que tenía una llamada en espera. Sin esto, el grid
+                            # mostraba el cambio de audio pero nunca decía que la llamada se retomó.
+                            elseif ($linea -match "Call StateChanged Call\[Id=[0-9a-fA-F\-]+,ConnectionId=(\d+),OldState=Inactive,NewState=Active\]") {
+                                $SesR = $matches[1]
+                                if (-not $RetomaImplicita.ContainsKey($SesR)) { $RetomaImplicita[$SesR] = @() }
+                                $SlotRet = "$HoraLimpia,$MsLimpio"
+                                if ($RetomaImplicita[$SesR] -notcontains $SlotRet) {
+                                    Init-Hora $SlotRet
+                                    $RetomaImplicita[$SesR] += $SlotRet
                                 }
                             }
                             # --- FALLBACK TELÉFONO: capturar RemoteParty del "Call ended" del día analizado ---
@@ -1522,20 +1894,67 @@ $btnAnalizar.Add_Click({
                         }
 
                         # Fuera del filtro de fecha — corren para TODAS las líneas del archivo
-                        if ($HoraLimpia -ne "" -and $linea -match "Session_LoginAgent failed") { Init-Hora $HoraLimpia; $EventosTiempo[$HoraLimpia].RawAux += "$linea`n" }
+                        if ($HoraLimpia -ne "" -and $linea -match "Session_LoginAgent failed") {
+                            Init-Hora $HoraLimpia
+                            # La línea del fallo es continuación de un stack trace: NO trae timestamp propio.
+                            # Su ms real vive en la línea anterior con hora (End Executing method LoginAgent),
+                            # que $MsLimpio ya conserva (solo se actualiza en líneas con timestamp). Se antepone
+                            # "[HH:mm:ss,fff]" para que el extractor de ms del render lo encuentre y el tooltip lo muestre.
+                            $EventosTiempo[$HoraLimpia].RawAux += "[$HoraLimpia,$MsLimpio] $linea`n"
+                        }
                         if ($linea -match "(?i)Call ended.*?Id=(\d+)") { $ConexionesYaIniciadas.Remove($matches[1]) | Out-Null }
 
                         # Radares de crash y errores
+                        # OJO: ThreadAbortException / "Subproceso anulado" es AMBIGUO por sí solo. Es un abort de hilo .NET
+                        # que Avaya lanza al reciclar sus PROPIOS hilos, y ocurre en DOS situaciones opuestas:
+                        #   (a) recuperación de red / reinicio de servicio → la app SIGUE abierta.
+                        #   (b) teardown de un cierre normal (Shutdown/ExitHandler) → la app SÍ se cerró.
+                        # Un cierre real por Task Manager (TerminateProcess) NO deja este log (el proceso muere sin más).
+                        # Antes se marcaba "Cierre Forzado" rojo (falso positivo en (a)); luego "la app NO se cerró"
+                        # (falso en (b)). Ahora se CAPTURA y se decide en el barrido según haya o no cierre de app.
                         if ($HoraLimpia -ne "" -and $linea -match "(?i)ThreadAbortException|Subproceso anulado") {
-                            $SlotErr = "$HoraLimpia,$MsLimpio"; Init-Hora $SlotErr; $EventosTiempo[$SlotErr].AppLog = "¡AVAYA ALERTA!: Cierre Forzado (X o Taskmgr)"
-                            $EventosTiempo[$SlotErr].ColorApp = [System.Drawing.Color]::Red; $EventosTiempo[$SlotErr].RawAppLog += "$linea`n"
+                            $HiloAbortadoList += [pscustomobject]@{ Slot = "$HoraLimpia,$MsLimpio"; Raw = $linea }
                         }
-                        if ($HoraLimpia -ne "" -and $linea -match "(?i)VoiceInteraction_Transfer failed|Transfer failed --->|StartTransferCallAction") {
-                            # Slot con ms: es un evento puntual (no estado del agente) → debe ordenarse y
-                            # mostrarse con su ms real, no caer en el slot base "sin ms" del segundo.
+                        # Falla Crítica GENERALIZADA de una operación telefónica: "VoiceInteraction_X failed" cubre
+                        # Hold, Transfer y cualquier otra operación futura que use el mismo mecanismo interno de
+                        # Avaya (Utils.CheckConditionAndHandleError lanzando PhoneServiceException "X Failed" cuando
+                        # la llamada muere/cambia de estado mientras la operación seguía esperando una condición —
+                        # confirmado con evidencia real en Transfer [16.4s de espera] y Hold [3.0s de espera]).
+                        # Se captura la PALABRA que antecede a "Failed" ($OpFalloVI) y se incluye en la etiqueta:
+                        # Pablo pidió explícitamente NO generalizar el texto a algo genérico como "Falla en
+                        # Operación", para no perder el detalle de CUÁL operación fue (caso Hold Failed 08/08/2026).
+                        if ($HoraLimpia -ne "" -and $linea -match "(?i)VoiceInteraction_(\w+) failed") {
+                            $OpFalloVI = $matches[1]
                             $SlotFalloVI = "$HoraLimpia,$MsLimpio"
-                            Init-Hora $SlotFalloVI; $EventosTiempo[$SlotFalloVI].AppLog = "¡AVAYA ALERTA!: Falla Crítica en Transferencia"
+                            Init-Hora $SlotFalloVI; $EventosTiempo[$SlotFalloVI].AppLog = "¡AVAYA ALERTA!: $OpFalloVI FAILED (Falla Crítica del sistema)"
                             $EventosTiempo[$SlotFalloVI].ColorApp = [System.Drawing.Color]::Red; $EventosTiempo[$SlotFalloVI].RawAppLog += "$linea`n"
+                        }
+                        # Variantes de fallo de transferencia SIN el prefijo "VoiceInteraction_" (mensajes/builds
+                        # antiguos donde no hay palabra capturable) — se conserva la etiqueta específica de Transferencia.
+                        elseif ($HoraLimpia -ne "" -and $linea -match "(?i)Transfer failed --->|StartTransferCallAction") {
+                            $SlotFalloVI = "$HoraLimpia,$MsLimpio"
+                            Init-Hora $SlotFalloVI; $EventosTiempo[$SlotFalloVI].AppLog = "¡AVAYA ALERTA!: TRANSFER FAILED (Falla Crítica del sistema)"
+                            $EventosTiempo[$SlotFalloVI].ColorApp = [System.Drawing.Color]::Red; $EventosTiempo[$SlotFalloVI].RawAppLog += "$linea`n"
+                        }
+                        # Transfer() ejecutado con ORIGEN = DESTINO (mismo Call Id y ConnId en ambos argumentos):
+                        # el método interno de Avaya se invocó SIN que se eligiera un destino real (no pasó por
+                        # el submenú de "Ingresar valor"/contacto). Huella validada con 0 falsos positivos contra
+                        # 2 transferencias exitosas (banco 205729: ConnSrc=47≠ConnDst=46; prueba plopezs 161304:
+                        # ConnSrc=2≠ConnDst=3) vs el incidente jvazquezn 05/08/2026 (ConnSrc=45=ConnDst=45).
+                        # No es un simple "olvidó marcar" del asesor: es Avaya iniciando la operación con un
+                        # destino auto-referenciado, la causa raíz del congelamiento de ~16s reportado. Se marca
+                        # como alerta de sistema (mismo prefijo "¡AVAYA ALERTA!" → fila resaltada en rojo) y se
+                        # suma a $Script:ErroresSospechosos para que aparezca también en "Revisar posibles errores"
+                        # al escanear logs de otros asesores/días.
+                        if ($HoraLimpia -ne "" -and $linea -match "Begin Executing method Transfer\(Call\[Id=([0-9a-fA-F\-]+),ConnId=(\d+)[^\]]*\],Call\[Id=([0-9a-fA-F\-]+),ConnId=(\d+)[^\]]*\]\)") {
+                            if ($matches[1] -eq $matches[3] -and $matches[2] -eq $matches[4]) {
+                                $SlotSelfTransf = "$HoraLimpia,$MsLimpio"
+                                Init-Hora $SlotSelfTransf
+                                $EventosTiempo[$SlotSelfTransf].AppLog = "¡AVAYA ALERTA!: Transfer() con origen=destino (Sesión $($matches[2])) — no hubo selección real de destino"
+                                $EventosTiempo[$SlotSelfTransf].ColorApp = [System.Drawing.Color]::Red
+                                $EventosTiempo[$SlotSelfTransf].RawAppLog += "$linea`n"
+                                $Script:ErroresSospechosos += [pscustomobject]@{ Hora = "$HoraLimpia,$MsLimpio"; Linea = "[TRANSFER ORIGEN=DESTINO] $($linea.Trim())" }
+                            }
                         }
                         if ($HoraLimpia -ne "" -and $linea -match "MoveSessionToConferenceCommand.*response is null|MoveSessionToConferenceRequest.*timed out") {
                             # MoveSessionToConferenceCommand response null = REAL ERROR: el CM no confirmó la unión.
@@ -1552,6 +1971,27 @@ $btnAnalizar.Add_Click({
                                 $EventosTiempo[$SlotErr].ColorApp = [System.Drawing.Color]::OrangeRed
                             }
                             $EventosTiempo[$SlotErr].RawAppLog += "$linea`n"
+                        }
+                        # --- FALLO AL RETENER (Hold): el PBX no confirmó el hold en 15 s (RC_RESPONSE_NULL) ---
+                        # Distinto de Reconnect/Unhold (retomar). Típico al intentar retener una línea SIN
+                        # llamada establecida (ej: 2ª línea con solo tono de marcar) → 15 s de timeout.
+                        # Debe ir ANTES del catch-all genérico para no quedar como vago "Evento sospechoso".
+                        # Se ancla SOLO a la excepción "Command failed [action=Hold, call=...]": es una única
+                        # línea por fallo y trae el UUID de la llamada. (Antes también enganchaba
+                        # "HoldSessionCommand response is null" → generaba la fila DUPLICADA.)
+                        if ($HoraLimpia -ne "" -and $linea -match "Command failed \[action=Hold") {
+                            $SlotHF = "$HoraLimpia,$MsLimpio"; Init-Hora $SlotHF
+                            $EventosTiempo[$SlotHF].AppLog      = "¡FALLO AL RETENER!: la llamada no se pudo poner en espera (Timeout PBX 15 s)"
+                            $EventosTiempo[$SlotHF].ColorApp    = [System.Drawing.Color]::Red
+                            $EventosTiempo[$SlotHF].RawAppLog  += "$linea`n"
+                            if ([string]::IsNullOrEmpty($EventosTiempo[$SlotHF].Interpretacion)) {
+                                $EventosTiempo[$SlotHF].Interpretacion      = "$symStop FALLO AL RETENER (la llamada no se pudo poner en espera)"
+                                $EventosTiempo[$SlotHF].ColorInterpretacion = [System.Drawing.Color]::Red
+                            }
+                            # Resolver la sesión por el UUID de la llamada para relabelar su "HOLD MANUAL".
+                            if ($linea -match "call=([0-9a-fA-F\-]{36})" -and $Script:CxtToConnId.ContainsKey($matches[1])) {
+                                $HoldFalloSes[$Script:CxtToConnId[$matches[1]]] = $SlotHF
+                            }
                         }
                         if ($HoraLimpia -ne "" -and $linea -match "TransferSessionCommand.*response is null|TransferSessionRequest.*timed out") {
                             Init-Hora $HoraLimpia
@@ -1597,13 +2037,12 @@ $btnAnalizar.Add_Click({
                             $SlotErr = "$HoraLimpia,$MsLimpio"; Init-Hora $SlotErr; $EventosTiempo[$SlotErr].AppLog = "¡ERR CRÍTICO!: System.Exception"
                             $EventosTiempo[$SlotErr].ColorApp = [System.Drawing.Color]::DarkRed; $EventosTiempo[$SlotErr].RawAppLog += "$linea`n"; $EventosTiempo[$SlotErr].RawInterpretacion += "$linea`n"
                         }
-                        elseif ($HoraLimpia -ne "" -and $linea -match "(?i)\bException\b|\bFATAL\b|\bERROR\b" -and $linea -notmatch "VoiceInteraction_Transfer|ThreadAbortException|System\.Exception|TransferSessionCommand|TransferSessionRequest") {
-                            $SlotErr = "$HoraLimpia,$MsLimpio"; Init-Hora $SlotErr
-                            if ([string]::IsNullOrEmpty($EventosTiempo[$SlotErr].AppLog)) {
-                                $EventosTiempo[$SlotErr].AppLog = "Evento sospechoso en código base (Revisar RAW)"
-                                $EventosTiempo[$SlotErr].ColorApp = [System.Drawing.Color]::Yellow
-                            }
-                            $EventosTiempo[$SlotErr].RawAppLog += "$linea`n"
+                        # LoginCommand/LogonResponse: el rawxml de la respuesta de login trae texto que dispara el
+                        # catch-all (p.ej. campos de error con valor 0). No es un error → se excluye.
+                        elseif ($HoraLimpia -ne "" -and $linea -match "(?i)\bException\b|\bFATAL\b|\bERROR\b" -and $linea -notmatch "VoiceInteraction_\w+ failed|ThreadAbortException|System\.Exception|TransferSessionCommand|TransferSessionRequest|LoginCommand|LogonResponse|LoginResponse") {
+                            # NO se pinta en el timeline (era "Evento sospechoso", ruido benigno + alarmante en
+                            # pantalla compartida). Se acumula en el buffer para revisarlo aparte bajo demanda.
+                            $Script:ErroresSospechosos += [pscustomobject]@{ Hora = "$HoraLimpia,$MsLimpio"; Linea = $linea.Trim() }
                         }
                     }
                 }
@@ -1618,6 +2057,8 @@ $btnAnalizar.Add_Click({
             $LlamadasVistas = @{}; $CuelguesVistos = @{}; $CuelguesManuales = @{}; $EstadoSesion = @{}
             $ConsultaTransf = @{}; $ConsultaConf = @{}   # sesId → destino: sesiones de consulta (Transferencia/Conferencia)
             $TransferConsultaColgada = $false             # $true cuando Transfer_CompleteSetup trae nfirstCall==nSecondCall (la pata de consulta/destino ya colgó antes de completar)
+            $TransferSinDestinoPorSes = @{}               # sesión cliente (from) → $true si "OnRequestTransferSession: To session id" == from (no se marcó un destino separado → transferencia SIN destino)
+            $TransferSinDestino = $false                  # flag vigente en el CompleteSetup: distingue "no se marcó destino" de "el destino colgó"
             $DescForzadaSlot = @{}                        # segundo → slot: dedup de "otra sesión tomó la extensión" (URQ 2009/Force logoff by server dispara 3 líneas en el mismo segundo)
 
             if ($ArchivosLog) {
@@ -1669,8 +2110,15 @@ $btnAnalizar.Add_Click({
                     #   sesión 42 → $ConsultaTransf["42"] contamina la etiqueta. La solución: cuando se
                     #   confirma la conferencia, removemos de $ConsultaTransf TODAS las sesiones involucradas,
                     #   incluyendo la que llega después de Conference_CompleteConf.
-                    $_TrPend = $false; $_TrDest = ""; $_CfPhones = @{}; $_CfPend = $false; $_CfDone = $false
+                    # Filtro de fecha ($FechaOmni, igual que el resto de PASO 5): un archivo EndpointLog.txt
+                    # rotado puede abarcar varios días, y Avaya reinicia/recicla el numero de SessionId en
+                    # cada login. Sin este filtro, una transferencia/conferencia real de OTRO día puede
+                    # contaminar $ConsultaTransf/$ConsultaConf con el mismo SessionId que hoy, mostrando un
+                    # destino que nunca ocurrió hoy (caso: "MARCANDO A LA EXT. +5520819192", confirmado por
+                    # Pablo como evento de un día previo con el mismo Id). Pablo, 18/08/2026.
+                    $_TrPend = $false; $_TrDest = ""; $_CfPhones = @{}; $_CfPend = $false; $_CfDone = $false; $_TrFrom = ""
                     foreach ($linea in $LineasLog) {
+                        if ($linea -notmatch "^\[?$FechaOmni") { continue }
                         if ($linea -match "UpdateHistoryRecord: SessionId=\s*(\d+),.*RemoteUserAddress=\s*([^.]+)\.") {
                             $s = $matches[1]; $n = $matches[2].Trim()
                             if ($n -ne "") {
@@ -1683,8 +2131,13 @@ $btnAnalizar.Add_Click({
                                 }
                             }
                         }
-                        if ($linea -match "OnRequestTransferSession\(\) entered from sessionId=\d+") {
-                            $_TrPend = $true; $_TrDest = ""; $_CfPend = $false; $_CfDone = $false
+                        if ($linea -match "OnRequestTransferSession\(\) entered from sessionId=(\d+)") {
+                            $_TrPend = $true; $_TrDest = ""; $_CfPend = $false; $_CfDone = $false; $_TrFrom = $matches[1]
+                        }
+                        # "To session id" == la sesión del cliente (from) ⇒ NO hubo una consulta/destino separado
+                        # (transferencia SIN destino, ej: se dio Transferir sin marcar). Si es distinta ⇒ sí hubo consulta.
+                        if ($linea -match "OnRequestTransferSession: To session id=(\d+)" -and $_TrFrom -ne "") {
+                            $TransferSinDestinoPorSes[$_TrFrom] = ($_TrFrom -eq $matches[1])
                         }
                         if ($_TrPend -and $linea -match "\bTo phone#: '([^']+)'") { $_TrDest = $matches[1] }
                         if ($_TrPend -and $linea -match "UpdateHistoryRecord: SessionId=\s*(\d+),.*RemoteUserAddress=\s*\.") {
@@ -1732,6 +2185,50 @@ $btnAnalizar.Add_Click({
 
                         if ($linea -match "^\[?$FechaOmni.*?(\d{2}:\d{2}:\d{2})(?::(\d{3}))?") {
                             $HoraLimpia = $matches[1]; $MsLimpio5 = if ($matches[2]) { $matches[2] } else { "000" }
+                            # Buscador de vacíos: registra CUALQUIER línea con timestamp (Endpoint.log), misma
+                            # lista combinada que PASO 4 (ambos logs son del proceso OneXAgent.exe).
+                            if ($HoraLimpia -match '^(\d{2}):(\d{2}):(\d{2})$') { $Script:TsProceso.Add(([int64]$matches[1])*3600000L + ([int64]$matches[2])*60000L + ([int64]$matches[3])*1000L + [int64]$MsLimpio5) }
+
+                            # Letra de call-appearance (a/b/c… → línea 1/2/3…) para "Asesor abre línea N".
+                            # Solo la que mapea a un buttonIndex válido (>=0); se descartan las de ' '/-1 (ruido de display).
+                            if ($linea -match "MapCallAppToBtnIndex\(([a-zA-Z])\)\s*=>\s*buttonIndex:\s*(-?\d+)") {
+                                $_lt = ([string]$matches[1]).ToLower(); $_btn = [int]$matches[2]
+                                if ($_btn -ge 0) {
+                                    $LineaAppPorSeg[$HoraLimpia] = $_lt
+                                    # buttonIndex → número de línea (a=1, b=2, c=3…): el índice físico varía por plantilla, la letra no.
+                                    if ($_lt -match "^[a-z]$" -and -not $LineaAppBtn.ContainsKey($_btn)) { $LineaAppBtn[$_btn] = [int][char]$_lt - [int][char]'a' + 1 }
+                                }
+                            }
+                            # Cronología de la LÍNEA ACTIVA: permite saber a qué línea pertenece cada sesión de audio.
+                            # ("found activeLine: N" al conmutar de línea; <lineAppearanceId>N</lineAppearanceId> al crear la llamada.)
+                            if ($linea -match "found activeLine:\s*(\d+)" -or $linea -match "<lineAppearanceId>(\d+)</lineAppearanceId>") {
+                                $_btnA = [int]$matches[1]
+                                try { $_msA = [int]([datetime]::ParseExact($HoraLimpia,"HH:mm:ss",$null).TimeOfDay.TotalSeconds) * 1000 + [int]$MsLimpio5 } catch { $_msA = -1 }
+                                if ($_msA -ge 0) { $ActiveLineSeq += [pscustomobject]@{ Ms = $_msA; Btn = $_btnA } }
+                            }
+
+                            # DTMF: dígitos que el asesor teclea DURANTE una llamada (marcar destino o navegar IVR).
+                            # "input digit constant" da el símbolo (19-28=0-9, 29='*', 30='#'); la línea siguiente
+                            # "nCallIndex N: call State" da la sesión. Los dígitos de firma/desfirme (FAC) NO traen
+                            # nCallIndex, por eso quedan fuera. El sweep post-PASO5 los agrupa en secuencias.
+                            if ($linea -match "OnRequestPressDigit: input digit constant:\s*(\d+)") {
+                                $DtmfConstPend = [int]$matches[1]; $DtmfHoraPend = "$HoraLimpia,$MsLimpio5"
+                            }
+                            elseif ($linea -match "OnRequestPressDigit:.*nCallIndex\s+(\d+):\s*call State") {
+                                if ($null -ne $DtmfConstPend) {
+                                    $simDtmf = if ($DtmfConstPend -ge 19 -and $DtmfConstPend -le 28) { [string]($DtmfConstPend - 19) } elseif ($DtmfConstPend -eq 29) { "*" } elseif ($DtmfConstPend -eq 30) { "#" } else { "?" }
+                                    $DtmfPresses += [pscustomobject]@{ Sim = $simDtmf; Ses = $matches[1]; Hora = $DtmfHoraPend }
+                                    $DtmfConstPend = $null
+                                }
+                            }
+
+                            # Número que el asesor teclea en la caja de texto y envía con Enter (método NewCallHandler).
+                            # ApplyDialingRulesToNumber trae el número ya listo para marcar (con prefijo de salida).
+                            # Se guarda con su ms para emparejarlo con el NewCallHandler más cercano tras PASO 5.
+                            if ($linea -match "ApplyDialingRulesToNumber entered '([^']+)'") {
+                                try { $_msAD = [int]([datetime]::ParseExact($HoraLimpia,"HH:mm:ss",$null).TimeOfDay.TotalSeconds) * 1000 + [int]$MsLimpio5 } catch { $_msAD = -1 }
+                                if ($_msAD -ge 0) { $DialedApply += [pscustomobject]@{ Ms = $_msAD; Num = $matches[1] } }
+                            }
 
                             # Mapeo de dirección
                             if ($linea -match "GenerateIncomingCall: callIndex:\s*(\d+)") {
@@ -1746,15 +2243,18 @@ $btnAnalizar.Add_Click({
                                 if ($SentidoEP -eq "True" -and $linea -match "RemoteParty=\[,\]") {
                                     $SesionesBridge[$IDLlamadaEP] = $HoraLimpia
                                     $DirLlamada[$IDLlamadaEP] = "BRIDGE"
-                                    $SlotBEP = "$HoraLimpia,$MsLimpio5"
-                                    $BridgeSlot[$IDLlamadaEP] = $SlotBEP
-                                    Init-Hora $SlotBEP
-                                    $EventosTiempo[$SlotBEP].Sesion = $IDLlamadaEP
-                                    if ($EventosTiempo[$SlotBEP].Interpretacion -eq "") {
-                                        $EventosTiempo[$SlotBEP].Interpretacion = "[!] Sesión bridge del sistema (auto-transferencia)"
-                                        $EventosTiempo[$SlotBEP].ColorInterpretacion = [System.Drawing.Color]::Orange
+                                    # Una sola fila por sesión (ver nota en el creador de PASO 4).
+                                    if (-not $BridgeSlot.ContainsKey($IDLlamadaEP)) {
+                                        $SlotBEP = "$HoraLimpia,$MsLimpio5"
+                                        $BridgeSlot[$IDLlamadaEP] = $SlotBEP
+                                        Init-Hora $SlotBEP
+                                        $EventosTiempo[$SlotBEP].Sesion = $IDLlamadaEP
+                                        if ($EventosTiempo[$SlotBEP].Interpretacion -eq "") {
+                                            $EventosTiempo[$SlotBEP].Interpretacion = "[!] Sesión bridge del sistema (auto-transferencia)"
+                                            $EventosTiempo[$SlotBEP].ColorInterpretacion = [System.Drawing.Color]::Orange
+                                        }
                                     }
-                                    $EventosTiempo[$SlotBEP].RawInterpretacion += "$linea`n"
+                                    $EventosTiempo[$BridgeSlot[$IDLlamadaEP]].RawInterpretacion += "$linea`n"
                                 } else {
                                     if ($SentidoEP -eq "True") { $DirLlamada[$IDLlamadaEP] = "SALIENTE" } else { $DirLlamada[$IDLlamadaEP] = "ENTRANTE" }
                                 }
@@ -1762,15 +2262,21 @@ $btnAnalizar.Add_Click({
 
                             if ($linea -match "UpdateHistoryRecord: SessionId=\s*(\d+),.*RemoteUserAddress=\s*([^.]+)\.") {
                                 $SesID = $matches[1]; $NumObj = $matches[2].Trim()
-                                $MapeoTel[$SesID] = $NumObj; $RawMapeoTel[$SesID] = $linea
                                 $NumLimpio = $NumObj -replace '\D',''
+                                # Dirección PLAUSIBLE = al menos 3 dígitos. Las patas que Avaya crea para AUTO-CONTESTAR
+                                # una entrante (y los marcados a medias) reciben basura de 1 dígito: un '0', o el prefijo
+                                # de salida '9'. Eso NO es un destino. Antes bastaba cualquier dígito → se retiraba el
+                                # marcador bridge y la pata phantom terminaba pintada como "INICIO DE LLAMADA (Saliente)
+                                # al 0" junto a la llamada entrante real. Extensiones (5 díg.) y códigos FAC (3) sí pasan.
+                                $EsNumPlausible = ($NumLimpio.Length -ge 3)
+                                if ($EsNumPlausible) { $MapeoTel[$SesID] = $NumObj; $RawMapeoTel[$SesID] = $linea; $FarEndResueltoSlots += [pscustomobject]@{ Ses = $SesID; Slot = "$HoraLimpia,$MsLimpio5" } }
                                 # --- RETRACT bridge falso-positivo ---
                                 # Si esta sesión fue marcada "Sesión bridge" en PASO 4/5 pero ahora tiene una
                                 # dirección REAL en el historial (dígitos), NO es una pata phantom de transferencia:
                                 # es una llamada normal (login FAC 564, marcado 955, número externo, favorito de línea)
                                 # que se marcó bridge solo porque RemoteParty nace vacío y se puebla ~ms después.
                                 # Las patas phantom reales NUNCA obtienen dirección (RemoteUserAddress vacío) → nunca se retiran.
-                                if ($NumLimpio.Length -gt 0 -and $SesionesBridge.ContainsKey($SesID)) {
+                                if ($EsNumPlausible -and $SesionesBridge.ContainsKey($SesID)) {
                                     $SlotBr = $BridgeSlot[$SesID]
                                     if ($SlotBr -and $EventosTiempo.ContainsKey($SlotBr) -and $EventosTiempo[$SlotBr].Interpretacion -match "Sesión bridge") {
                                         $EventosTiempo[$SlotBr].Interpretacion = ""
@@ -1804,6 +2310,27 @@ $btnAnalizar.Add_Click({
                                             break
                                         }
                                     } catch {}
+                                }
+                                # DEDUP del doble DIAL de login (Avaya dialea el FAC 564 dos veces): si ya hay un
+                                # "Usuario intentando firmarse" en los últimos ~3s, no crear otra fila. Si este 2º
+                                # dial encontró la Ext y el previo no, se mejora el previo. Va ANTES del cierre de
+                                # zombies para no ejecutarlo dos veces (evita doble "SESIÓN ABORTADA").
+                                $SlotPrevioIntento = $null
+                                for ($iP = 0; $iP -le 3 -and -not $SlotPrevioIntento; $iP++) {
+                                    try {
+                                        $hP = ([datetime]::ParseExact($HoraLimpia,"HH:mm:ss",$null).AddSeconds(-$iP)).ToString("HH:mm:ss")
+                                        foreach ($kP in @($EventosTiempo.Keys)) {
+                                            if ((($kP -split ',')[0] -eq $hP) -and $EventosTiempo[$kP].Interpretacion -match "Usuario intentando firmarse") { $SlotPrevioIntento = $kP; break }
+                                        }
+                                    } catch {}
+                                }
+                                if ($SlotPrevioIntento) {
+                                    if ($ExtEncontrada -ne "" -and $EventosTiempo[$SlotPrevioIntento].Interpretacion -notmatch "en la Ext\.") {
+                                        $EventosTiempo[$SlotPrevioIntento].Interpretacion = "Usuario intentando firmarse en la Ext. $ExtEncontrada"
+                                        if ($HoraMatch) { $EventosTiempo[$HoraMatch].Aux = $EventosTiempo[$HoraMatch].Aux -replace "INTENTO_FIRMA_ONEX_EXT:\d+\|", "" }
+                                    }
+                                    $EventosTiempo[$SlotPrevioIntento].RawInterpretacion += "[$HoraLimpia] (Endpoint, dial repetido del mismo login): $linea`n"
+                                    continue
                                 }
                                 # Cerrar sesiones zombie antes del nuevo login
                                 $LlavesZombi = @($EstadoSesion.Keys)
@@ -1856,6 +2383,9 @@ $btnAnalizar.Add_Click({
                                 # Ej: 95539991927 → 5539991927  |  +5539991927 → 5539991927  (mismo número, distintos formatos)
                                 $TelNorm = ($TelActual -replace '^\+','') -replace '^9(\d{10,})$','$1'
                                 $FirmaUnica = "$Ses-$TelNorm"; $EstadoSesion[$Ses] = "ACTIVA"
+                                # Fijar el PRIMER número real de la sesión (una sola vez; se libera en SessionEnded).
+                                # Si un update posterior trae otro número → la sesión CAMBIÓ = transferencia inter-agente real.
+                                if (-not $_PrimerFonoSes.ContainsKey($Ses) -and $TelActual -ne "Desconocido" -and $TelNorm -ne "") { $_PrimerFonoSes[$Ses] = $TelNorm }
 
                                 if (-not $LlamadasVistas[$FirmaUnica]) {
 
@@ -1951,8 +2481,13 @@ $btnAnalizar.Add_Click({
                                         # Actualización de teléfono mid-call: sesión ENTRANTE activa recibe número diferente.
                                         # Típico de transferencia inter-agente: CM reemplaza el número del agente originador
                                         # por el número real del cliente. No es una nueva llamada — la sesión continúa activa.
+                                        # CLAVE: se exige que ESTA sesión haya CAMBIADO de número ($_PrimerFonoSes[$Ses] ≠ actual).
+                                        # Antes bastaba con que el número estuviera en $MidCallPhones (lista GLOBAL por número), lo que
+                                        # marcaba falsamente como inter-agente una llamada NUEVA de un cliente que ya había llamado
+                                        # antes (mismo número, sesión distinta, sin cambio). Caso plopezs 28/07 (ses 45 real vs ses 46 falsa).
                                         if ($DirLlamada[$Ses] -eq "ENTRANTE" -and $TelActual -ne "Desconocido" -and
                                             $Script:MidCallPhones.ContainsKey($TelNorm) -and
+                                            $_PrimerFonoSes.ContainsKey($Ses) -and $_PrimerFonoSes[$Ses] -ne $TelNorm -and
                                             $EventosTiempo[$HoraLimpia].Interpretacion -notmatch "intentando firmarse|INICIO DE LLAMADA|LÍNEA ABIERTA|señal de llamada") {
                                             $EventosTiempo[$HoraLimpia].Interpretacion = "$symArr Número de cliente actualizado (Transferencia inter-agente)"
                                             $EventosTiempo[$HoraLimpia].ColorInterpretacion = [System.Drawing.Color]::CornflowerBlue
@@ -2000,11 +2535,15 @@ $btnAnalizar.Add_Click({
                                 $TelFinNorm = ($TelActual -replace '^\+','') -replace '^9(\d{10,})$','$1'
                                 if ($TelFinNorm -ne "Desconocido" -and $TelFinNorm -ne "") { $PhoneYaEnInicio.Remove($TelFinNorm) | Out-Null }
                                 $SesionHoraInicio.Remove($Ses) | Out-Null   # limpiar tracking de UpdateHistoryRecord
+                                $_PrimerFonoSes.Remove($Ses) | Out-Null     # liberar 1er-número (el ID de sesión se recicla)
 
                                 if (-not $CuelguesVistos[$FirmaUnica]) {
                                     $CuelguesVistos[$FirmaUnica]=$true
                                     if ($TelActual -match "^\+?564(3\d{5})\d{6}$") {
-                                        $EvA="Entry.ConnectinoID=$Ses"; $ColorA=[System.Drawing.Color]::DarkCyan; $EventosTiempo[$HoraLimpia].Tel="-"
+                                        # Cierre de la llamada FAC de firma: evento interno sin valor para el análisis.
+                                        # Antes pintaba "Entry.ConnectinoID=N" (resto de la 1ª versión); además esa fila
+                                        # con contenido reseteaba $RecienFirmado y destapaba el DEFAULT automático.
+                                        $EventosTiempo[$HoraLimpia].Tel = "-"
                                     } else {
                                         $SlotFin = "$HoraLimpia,$MsLimpio5"
                                         Init-Hora $SlotFin
@@ -2067,14 +2606,23 @@ $btnAnalizar.Add_Click({
                                 $EventosTiempo[$UnmuteSlotSeg[$HoraLimpia]].RawAgente += "$linea`n"
                             }
                             elseif ($linea -match "Message type= TransferSessionRequest" -or $linea -match "OnRequestTransferSession") {
-                                # Dedup: si ya existe una "TRANSFERENCIA INICIADA" en este mismo segundo (slot base o ms),
-                                # no crear otra fila. TransferSessionRequest y OnRequestTransferSession pueden disparar
-                                # en el mismo segundo y producían dos filas idénticas (una sin ms, otra con ms).
+                                # Dedup: si ya existe la fila de inicio de transferencia en este mismo segundo
+                                # (slot base o ms), no crear otra. TransferSessionRequest y OnRequestTransferSession
+                                # pueden disparar en el mismo segundo y producían dos filas idénticas.
                                 $YaHayTransfIni = $false
                                 foreach ($kT in @($EventosTiempo.Keys)) {
-                                    if (($kT -eq $HoraLimpia -or $kT -match "^$([regex]::Escape($HoraLimpia)),\d+$") -and $EventosTiempo[$kT].Agente -match "TRANSFERENCIA INICIADA") { $YaHayTransfIni = $true; break }
+                                    if (($kT -eq $HoraLimpia -or $kT -match "^$([regex]::Escape($HoraLimpia)),\d+$") -and $EventosTiempo[$kT].Agente -match "TRANSFERENCIA INICIADA|Asesor presiona bot.n Transferir") { $YaHayTransfIni = $true; break }
                                 }
-                                if (-not $YaHayTransfIni) { $EvA="$symArr TRANSFERENCIA INICIADA"; $ColorA=[System.Drawing.Color]::Plum }
+                                if (-not $YaHayTransfIni) {
+                                    # Si hubo clic GUI (TransferCallHandler) en este segundo → fue el asesor.
+                                    # Si no hubo clic → transferencia AUTOMÁTICA (sistema). El clic puede caer 1 s antes.
+                                    $HuboClicTransf = $TransfClicSeg.ContainsKey($HoraLimpia)
+                                    if (-not $HuboClicTransf) {
+                                        try { $sPrevT = ([datetime]::ParseExact($HoraLimpia,"HH:mm:ss",$null).AddSeconds(-1)).ToString("HH:mm:ss"); if ($TransfClicSeg.ContainsKey($sPrevT)) { $HuboClicTransf = $true } } catch {}
+                                    }
+                                    if ($HuboClicTransf) { $EvA="$symArr Asesor presiona botón Transferir"; $ColorA=[System.Drawing.Color]::Plum }
+                                    else                 { $EvA="$symArr TRANSFERENCIA INICIADA";           $ColorA=[System.Drawing.Color]::Plum }
+                                }
                             }
                             elseif ($linea -match "Message type= MoveSessionToConferenceRequest" -or $linea -match "OnRequestMoveSessionToConference") { $EvA="↔ CONFERENCIA INICIADA"; $ColorA=[System.Drawing.Color]::Orchid }
                             elseif ($linea -match "Message type= LogoutRequest") { $EvA="¦ ASESOR SOLICITÓ DESFIRMARSE (Clic en Salir)"; $ColorA=[System.Drawing.Color]::LightCoral }
@@ -2099,13 +2647,20 @@ $btnAnalizar.Add_Click({
                                 $SlotTransferenciaCompletada = "$HoraLimpia,$MsLimpio5"
                                 Init-Hora $SlotTransferenciaCompletada
                                 if ($_nF -eq $_nS) {
-                                    # nfirstCall == nSecondCall: la 2ª pata (consulta/destino) ya no existe. Es la firma
-                                    # de que el DESTINO CONSULTADO COLGÓ antes de que el asesor completara la transferencia:
-                                    # quedó una sola llamada viva y el PBX no puede unir dos sesiones → terminará en Timeout.
+                                    # nfirstCall == nSecondCall: la 2ª pata (consulta/destino) no existe → PBX no puede unir
+                                    # → terminará en Timeout. DOS causas distintas, mismo síntoma:
+                                    #   • SIN DESTINO  = "To session id" apuntó al mismo cliente → nunca se marcó a quién transferir (azartillos).
+                                    #   • DESTINO COLGÓ = hubo una consulta separada con número que colgó antes de completar (ialzalden).
                                     $TransferConsultaColgada = $true
-                                    $EventosTiempo[$SlotTransferenciaCompletada].Agente = "○ TRANSFERENCIA EN PROCESO (el destino de la consulta ya no responde)"
+                                    if ($TransferSinDestinoPorSes[$_nF]) {
+                                        $TransferSinDestino = $true
+                                        $EventosTiempo[$SlotTransferenciaCompletada].Agente = "○ TRANSFERENCIA SIN DESTINO (no se marcó a quién transferir)"
+                                    } else {
+                                        $TransferSinDestino = $false
+                                        $EventosTiempo[$SlotTransferenciaCompletada].Agente = "○ TRANSFERENCIA EN PROCESO (el destino de la consulta ya no responde)"
+                                    }
                                 } else {
-                                    $TransferConsultaColgada = $false
+                                    $TransferConsultaColgada = $false; $TransferSinDestino = $false
                                     $EventosTiempo[$SlotTransferenciaCompletada].Agente = "○ TRANSFERENCIA EN PROCESO: $_telOrigen → $_telDest"
                                 }
                                 $EventosTiempo[$SlotTransferenciaCompletada].ColorAgente = [System.Drawing.Color]::Orange
@@ -2128,14 +2683,16 @@ $btnAnalizar.Add_Click({
                             elseif ($linea -match "Transfer_Timeout entered") {
                                 $SlotFalloTransf = if ($SlotTransferenciaCompletada -and $SlotTransferenciaCompletada -match "^$([regex]::Escape($HoraLimpia)),") { $SlotTransferenciaCompletada } else { "$HoraLimpia,$MsLimpio5" }
                                 Init-Hora $SlotFalloTransf
-                                if ($TransferConsultaColgada) {
+                                if ($TransferSinDestino) {
+                                    $EventosTiempo[$SlotFalloTransf].Agente = "$symStop FALLO TRANSFERENCIA: no se marcó ningún destino (se dio Transferir sin marcar a quién)"
+                                } elseif ($TransferConsultaColgada) {
                                     $EventosTiempo[$SlotFalloTransf].Agente = "$symStop FALLO TRANSFERENCIA: el destino de la consulta colgó antes de completar"
                                 } else {
                                     $EventosTiempo[$SlotFalloTransf].Agente = "$symStop FALLO: TRANSFERENCIA NO COMPLETADA (Timeout PBX)"
                                 }
                                 $EventosTiempo[$SlotFalloTransf].ColorAgente = [System.Drawing.Color]::Red
                                 $EventosTiempo[$SlotFalloTransf].RawAgente  += "$linea`n"
-                                $TransferConsultaColgada = $false
+                                $TransferConsultaColgada = $false; $TransferSinDestino = $false
                             }
 
                             if ($EvA -ne "") {
@@ -2151,7 +2708,7 @@ $btnAnalizar.Add_Click({
                                     if ($EventosTiempo[$SlotEvA].Tel    -eq "-" -and $EventosTiempo[$HoraLimpia].Tel    -ne "-") { $EventosTiempo[$SlotEvA].Tel    = $EventosTiempo[$HoraLimpia].Tel }
                                 }
                                 $esFinal = $EvA -match "TRANSFERENCIA COMPLETADA"
-                                if ($esFinal -or $EventosTiempo[$SlotEvA].Agente -notmatch "HOLD|UNHOLD|CUELGUE MANUAL|MUTE|TRANSFERENCIA INICIADA|CONFERENCIA INICIADA|DESFIRMARSE|TRANSFERENCIA COMPLETADA") {
+                                if ($esFinal -or $EventosTiempo[$SlotEvA].Agente -notmatch "HOLD|UNHOLD|CUELGUE MANUAL|MUTE|TRANSFERENCIA INICIADA|Asesor presiona bot.n Transferir|CONFERENCIA INICIADA|DESFIRMARSE|TRANSFERENCIA COMPLETADA") {
                                     $EventosTiempo[$SlotEvA].Agente=$EvA; $EventosTiempo[$SlotEvA].ColorAgente=$ColorA
                                     $EventosTiempo[$SlotEvA].RawAgente+="$linea`n"
                                 } else {
@@ -2187,9 +2744,38 @@ $btnAnalizar.Add_Click({
                                 $EventosTiempo[$targetErr].RawAgente  += "$linea`n"
                                 $SlotConferenciaEstablecida = ""
                             }
-                            # closeSignalingChannel: caída del canal de señalización. PERO si fue porque el servidor
-                            # envió un URQ (expulsión), NO es caída de túnel — lo maneja la detección de "User moved".
-                            if ($linea -match "closeSignalingChannel" -and $linea -notmatch "Server sent a URQ") { $EvApp="¡AVAYA ALERTA!: Caída de Túnel Principal"; $ColorApp=[System.Drawing.Color]::Red }
+                            # closeSignalingChannel: cierre del canal de señalización. OJO: distinguir POR QUÉ se cerró:
+                            #   • category:0, code:0 + "closed by the application"  = CIERRE LIMPIO (el asesor cerró/desfirmó) → NO es caída.
+                            #   • category:2, code:10060 (WSAETIMEDOUT)             = CAÍDA DE RED real → sí es alerta.
+                            # Antes esta línea marcaba CUALQUIER closeSignalingChannel como "Caída de Túnel" (falso positivo
+                            # en todo cierre normal). Ahora solo alerta cuando el cierre NO es limpio.
+                            if ($linea -match "closeSignalingChannel:\s*category:\s*(\d+),\s*code:\s*(\d+)" -and $linea -notmatch "Server sent a URQ") {
+                                $catCS = [int]$matches[1]; $codeCS = [int]$matches[2]
+                                if ($catCS -ne 0 -or $codeCS -ne 0) {
+                                    $EvApp="¡AVAYA ALERTA!: Caída de Túnel Principal"; $ColorApp=[System.Drawing.Color]::Red
+                                    $RedCaidaList += [pscustomobject]@{ Slot = "$HoraLimpia,$MsLimpio5"; Raw = $linea }
+                                }
+                            }
+                            # --- Caso "logeo autónomo": señales de PASO 5 (captura en listas, se emiten en barrido post-PASO5) ---
+                            # Desfirme manual (el asesor eligió "Cerrar sesión" o lo disparó el cierre con la X):
+                            if ($linea -match "Logoff:.*requestor='manual'") { $DesfirmeManualList += [pscustomobject]@{ Slot = "$HoraLimpia,$MsLimpio5"; Raw = $linea } }
+                            # Caída de red sostenida (keepalive al gatekeeper falla repetidamente):
+                            if ($linea -match "RASKeepaliveFailed|RASKeepAliveFailed") { $RedCaidaList += [pscustomobject]@{ Slot = "$HoraLimpia,$MsLimpio5"; Raw = $linea } }
+                            # Recuperación de enlace en curso (Avaya intenta reconectar solo, mientras la app sigue abierta):
+                            if ($linea -match "LinkRecoveryProgressEvent") { $ReconIntentoList += [pscustomobject]@{ Slot = "$HoraLimpia,$MsLimpio5"; Raw = $linea } }
+                            # Reconexión AUTOMÁTICA exitosa: bLInkRecovery=1 = recuperación de enlace (la app estaba ABIERTA, NO login manual):
+                            if ($linea -match "CompleteLoginRequest:.*bLInkRecovery=1") { $ReconOkList += [pscustomobject]@{ Slot = "$HoraLimpia,$MsLimpio5"; Raw = $linea } }
+                            # LÍNEA ABIERTA SIN MARCAR (confirmación definitiva). Las 3 líneas llegan consecutivas:
+                            #   CHistoryManager::EndRecord: nSessionId = N
+                            #   EndHistoryRecord: nSessionID = N
+                            #   this record has no far-end address     ← solo si NUNCA se marcó un destino
+                            if ($linea -match "EndHistoryRecord:\s*nSessionID\s*=\s*(\d+)" -or $linea -match "CHistoryManager::EndRecord:\s*nSessionId\s*=\s*(\d+)") {
+                                $_endHistSes = $matches[1]; $_endHistSlot = "$HoraLimpia,$MsLimpio5"
+                            }
+                            elseif ($linea -match "this record has no far-end address" -and $_endHistSes) {
+                                $SinDestinoFin += [pscustomobject]@{ Ses = $_endHistSes; Slot = $_endHistSlot }
+                                $_endHistSes = $null
+                            }
                             # DESCONEXIÓN FORZADA POR EL SERVIDOR: otro dispositivo registró la MISMA extensión.
                             # El CM expulsa a este endpoint con URQ reason 2009 "Unregistering User moved" +
                             # "CompleteLogoffRequest: Force logoff by server". Causa real de "el OneX me desconectó".
@@ -2228,6 +2814,7 @@ $btnAnalizar.Add_Click({
             # esa fila no puede identificarse por sesión y queda fuera del barrido.
             # ================================================================
             $LimHoras = @($EventosTiempo.Keys | Sort-Object)
+            $MarcandoPorSes = @{}   # sesión de consulta → slot: garantiza UN SOLO "MARCANDO" por sesión
             foreach ($HoraLA in $LimHoras) {
                 if (-not $EventosTiempo.ContainsKey($HoraLA)) { continue }
                 $ObjLA = $EventosTiempo[$HoraLA]
@@ -2287,12 +2874,46 @@ $btnAnalizar.Add_Click({
                 # ② Consulta de Transferencia
                 if ($ConsultaTransf.ContainsKey($SesLA) -and
                     $ObjLA.Interpretacion -match "LÍNEA ABIERTA SIN MARCAR|INICIO DE LLAMADA|INICIO DE SESIÓN") {
-                    $SlotTransf = if ($ObjLA.Interpretacion -match "INICIO DE LLAMADA") { Get-SlotConsulta $HoraLA $SesLA $ObjLA.Tel } else { $HoraLA }
+                    # La apertura de línea para consultar genera VARIAS filas de la misma sesión (una en
+                    # slot base sin ms + el INICIO en ms). Antes cada una se reetiquetaba a "MARCANDO",
+                    # produciendo DOS filas y una de ellas antes del INICIO (slot base ordena primero).
+                    # ¿La sesión tiene un INICIO DE LLAMADA real en otro slot?
+                    $SesTieneInicioLlam = $false
+                    foreach ($kIni in @($EventosTiempo.Keys)) {
+                        if ($EventosTiempo[$kIni].Sesion -eq $SesLA -and $EventosTiempo[$kIni].Interpretacion -match "INICIO DE LLAMADA") { $SesTieneInicioLlam = $true; break }
+                    }
+                    # Fila duplicada/huérfana (LÍNEA ABIERTA / INICIO DE SESIÓN) cuya sesión YA tiene un
+                    # INICIO DE LLAMADA → limpiarla; el MARCANDO se pinta a partir del INICIO (queda DESPUÉS).
+                    if ($ObjLA.Interpretacion -notmatch "INICIO DE LLAMADA" -and $SesTieneInicioLlam) {
+                        $ObjLA.Interpretacion = ""; $ObjLA.ColorInterpretacion = [System.Drawing.Color]::White
+                        $ObjLA.RawInterpretacion += "[DEDUP MARCANDO] fila de consulta duplicada (sesión $SesLA ya tiene INICIO) — MARCANDO se pinta tras el INICIO`n"
+                        continue
+                    }
+                    # Dedup: un solo "MARCANDO" por sesión de consulta.
+                    if ($MarcandoPorSes.ContainsKey($SesLA)) {
+                        $ObjLA.Interpretacion = ""; $ObjLA.ColorInterpretacion = [System.Drawing.Color]::White
+                        continue
+                    }
+                    $destTr = $ConsultaTransf[$SesLA]
                     # Antes "CONSULTA DE TRANSFERENCIA →": impreciso (el asesor a veces solo consulta y no transfiere).
                     # Ahora describe la acción real: se está marcando al destino (2ª línea durante la llamada).
-                    $destTr = $ConsultaTransf[$SesLA]
+                    $SlotTransf = if ($ObjLA.Interpretacion -match "INICIO DE LLAMADA") { Get-SlotConsulta $HoraLA $SesLA $ObjLA.Tel } else { $HoraLA }
+                    # Si el slot quedó en base (sin ms) y hay ms-slots en ese segundo, moverlo al final del
+                    # segundo para que aparezca en orden cronológico (mismo criterio que ① Conferencia).
+                    if ($SlotTransf -notmatch ",") {
+                        $BaseHora = $SlotTransf; $msMax = 0
+                        foreach ($k in @($EventosTiempo.Keys)) { if ($k -match "^$([regex]::Escape($BaseHora)),(\d+)$" -and [int]$matches[1] -gt $msMax) { $msMax = [int]$matches[1] } }
+                        if ($msMax -gt 0) {
+                            $SlotMs = "$BaseHora,$($msMax + 1)"; Init-Hora $SlotMs
+                            $Src = $EventosTiempo[$BaseHora]; $Dst = $EventosTiempo[$SlotMs]
+                            foreach ($campo in @("Sesion","Tel","ViId","Topic","Agente","ColorAgente","Audio","ColorAudio","Aux","ColorAux","Ispeac","ColorIspeac","SysLog","ColorSys","AppLog","ColorApp","RawInterpretacion","RawAgente","RawAudio","RawAux","RawIspeac","RawSysLog","RawAppLog")) { $Dst[$campo] = $Src[$campo] }
+                            $EventosTiempo.Remove($BaseHora) | Out-Null
+                            $SlotTransf = $SlotMs
+                        }
+                    }
                     $EventosTiempo[$SlotTransf].Interpretacion = if ($destTr -and $destTr -ne "Desconocido") { "$symArr MARCANDO A LA EXT. $destTr" } else { "$symArr MARCANDO (consulta durante la llamada)" }
                     $EventosTiempo[$SlotTransf].ColorInterpretacion = [System.Drawing.Color]::Plum
+                    $MarcandoPorSes[$SesLA] = $SlotTransf
                     continue
                 }
                 # ③ LÍNEA ABIERTA huérfana (de PASO 4) cuya sesión ya tiene INICIO en PASO 5
@@ -2326,6 +2947,18 @@ $btnAnalizar.Add_Click({
                 $p = ($s -split ',')[0]
                 try { return [int]([datetime]::ParseExact($p,"HH:mm:ss",$null).TimeOfDay.TotalSeconds) } catch { return -1 }
             }
+            # Milisegundos absolutos de un slot "HH:mm:ss[,fff]" (para comparar eventos con precisión de ms)
+            $MsDeSlot = {
+                param($s)
+                if     ($s -match "^(\d{2}:\d{2}:\d{2}),(\d{1,3})$") { $hh = $matches[1]; $mm = [int]$matches[2] }
+                elseif ($s -match "^(\d{2}:\d{2}:\d{2})$")           { $hh = $matches[1]; $mm = 0 }
+                else { return -1 }
+                try { return [int]([datetime]::ParseExact($hh,"HH:mm:ss",$null).TimeOfDay.TotalSeconds) * 1000 + $mm } catch { return -1 }
+            }
+            # Segundos totales -> "mm:ss" para la duración que se muestra en FIN DE LLAMADA (saliente y entrante).
+            # OJO: [int] en PowerShell REDONDEA un double (banker's rounding), no trunca -> [int](90/60) da 2, no 1.
+            # Por eso los minutos se calculan con [math]::Floor (trunca de verdad hacia abajo).
+            $FmtMmSs = { param($totalSeg) "{0:D2}:{1:D2}" -f ([int][math]::Floor($totalSeg / 60)), ($totalSeg % 60) }
             foreach ($hLA2 in @($EventosTiempo.Keys)) {
                 if (-not $EventosTiempo.ContainsKey($hLA2)) { continue }
                 $oLA = $EventosTiempo[$hLA2]
@@ -2333,7 +2966,7 @@ $btnAnalizar.Add_Click({
 
                 # (1) La fila ya trae un evento de transferencia → la LÍNEA ABIERTA es ruido del
                 #     mecanismo; se quita la etiqueta y la fila conserva el evento real.
-                if ($oLA.Agente -match "TRANSFERENCIA INICIADA|TRANSFERENCIA EN PROCESO|TRANSFERENCIA COMPLETADA") {
+                if ($oLA.Agente -match "TRANSFERENCIA INICIADA|Asesor presiona bot.n Transferir|TRANSFERENCIA EN PROCESO|TRANSFERENCIA COMPLETADA") {
                     $oLA.Interpretacion = ""; $oLA.ColorInterpretacion = [System.Drawing.Color]::White
                     continue
                 }
@@ -2363,6 +2996,389 @@ $btnAnalizar.Add_Click({
                 }
                 # (3) else: línea abierta sin número y sin marcación posterior → posible EVASIÓN;
                 #     se conserva "LÍNEA ABIERTA SIN MARCAR" (el cierre confirmará con ¡EVASIÓN!).
+            }
+
+            # ================================================================
+            # REFINAR "Apertura de línea desde botón" (PressLineAppearance):
+            #  (P3) Si cae en el mismo segundo (±1 s) que el fin de un Transfer, NO fue una apertura
+            #       manual: fue el sistema RETOMANDO la llamada original tras un fallo de transferencia.
+            #  (P4) Si no, identificar el número de línea con la letra de call-appearance (a→1, b→2, c→3…).
+            # ================================================================
+            foreach ($kAL in @($EventosTiempo.Keys)) {
+                if (-not $EventosTiempo.ContainsKey($kAL)) { continue }
+                $oAL = $EventosTiempo[$kAL]
+                if ($oAL.Agente -notmatch "Apertura de línea desde botón") { continue }
+                $segAL = ($kAL -split ',')[0]
+                # (P3) ¿coincide con el fin de un Transfer? → retomado automático
+                $EsRetomado = $false
+                foreach ($off in -1,0,1) {
+                    try { $sChk = ([datetime]::ParseExact($segAL,"HH:mm:ss",$null).AddSeconds($off)).ToString("HH:mm:ss") } catch { $sChk = $segAL }
+                    if ($EndTransferSeg.ContainsKey($sChk)) { $EsRetomado = $true; break }
+                }
+                if ($EsRetomado) {
+                    $oAL.Agente      = "$symRes Llamada retomada automáticamente (tras fallo de transferencia)"
+                    $oAL.ColorAgente = [System.Drawing.Color]::LightGreen
+                    continue
+                }
+                # (P4) número de línea desde la letra de call-appearance del mismo segundo
+                $numLinea = 0
+                if ($LineaAppPorSeg.ContainsKey($segAL)) {
+                    $letra = $LineaAppPorSeg[$segAL]
+                    if ($letra -match "^[a-z]$") { $numLinea = [int][char]$letra - [int][char]'a' + 1 }
+                }
+                # ABRE vs CAMBIA: si tras el clic (≤500 ms) NACE una llamada → abrió la línea.
+                # Si en cambio una llamada sale del hold → solo cambió a una línea que ya estaba ocupada.
+                $msAL  = & $MsDeSlot $kAL
+                $Nace  = $false; $Retoma = $false
+                if ($msAL -ge 0) {
+                    foreach ($mc in $CallCreatedMs) { if ($mc -ge $msAL -and ($mc - $msAL) -le 500) { $Nace = $true; break } }
+                    if (-not $Nace) {
+                        foreach ($sR in $RetomaImplicita.Keys) {
+                            foreach ($slR in $RetomaImplicita[$sR]) {
+                                $mr = & $MsDeSlot $slR
+                                if ($mr -ge $msAL -and ($mr - $msAL) -le 500) { $Retoma = $true; break }
+                            }
+                            if ($Retoma) { break }
+                        }
+                    }
+                }
+                # Se describe la ACCIÓN (presionar el foquito de línea), no el efecto — "abre línea"
+                # se confundía con los eventos de "Audio abierto/cerrado". Si al presionar retoma una
+                # llamada que estaba en espera, se añade ese matiz.
+                $sufAL = if ($Retoma -and -not $Nace) { " (retoma la llamada en espera)" } else { "" }
+                if ($numLinea -ge 1 -and $numLinea -le 20) { $oAL.Agente = "↗ Asesor presiona botón de línea $numLinea$sufAL" }
+                else                                        { $oAL.Agente = "↗ Asesor presiona botón de línea$sufAL" }
+            }
+
+            # ================================================================
+            # RELABEL "HOLD MANUAL" que FALLÓ: si el hold de una sesión no se completó
+            # (HoldSessionCommand response null), su fila no debe mostrarse como exitosa.
+            # Se marca la fila HOLD MANUAL / "Llamada en Hold" de esa sesión que esté DENTRO
+            # de la ventana del timeout (≤20 s antes del fallo).
+            # ================================================================
+            if ($HoldFalloSes.Count -gt 0) {
+                foreach ($kH in @($EventosTiempo.Keys)) {
+                    if (-not $EventosTiempo.ContainsKey($kH)) { continue }
+                    $oH = $EventosTiempo[$kH]
+                    if (-not $HoldFalloSes.ContainsKey($oH.Sesion)) { continue }
+                    if ($oH.Agente -notmatch "HOLD MANUAL" -and $oH.Interpretacion -notmatch "Llamada en Hold") { continue }
+                    $slotFallo = $HoldFalloSes[$oH.Sesion]
+                    $segH = ($kH -split ',')[0]; $segF = ($slotFallo -split ',')[0]
+                    $okVentana = $false
+                    try { $dt = ([datetime]::ParseExact($segF,'HH:mm:ss',$null) - [datetime]::ParseExact($segH,'HH:mm:ss',$null)).TotalSeconds; $okVentana = ($dt -ge 0 -and $dt -le 20) } catch {}
+                    if (-not $okVentana) { continue }
+                    if ($oH.Agente -match "HOLD MANUAL") {
+                        $oH.Agente      = "$symStop HOLD MANUAL — ¡FALLÓ! (no se pudo retener la llamada)"
+                        $oH.ColorAgente = [System.Drawing.Color]::Red
+                    }
+                    if ($oH.Interpretacion -match "Llamada en Hold") {
+                        $oH.Interpretacion      = "$symStop Intento de HOLD que FALLÓ (no se pudo retener la llamada)"
+                        $oH.ColorInterpretacion = [System.Drawing.Color]::Red
+                    }
+                }
+            }
+
+            # ================================================================
+            # AUDIO → LÍNEA. "Línea abierta/cerrada" son en realidad la sesión de AUDIO (ISPEAC) y
+            # OneX mantiene UNA sola a la vez (el "call id= 1" del AudioLog es el slot del canal, no la
+            # llamada: siempre vale 1). Regla sin heurísticas ni umbrales: el ABIERTO toma la línea activa
+            # en ese instante; el CERRADO hereda la línea del último ABIERTO (cierra justo lo que ese abrió).
+            # Resuelve el caso confuso: al abrir la línea 2, activeLine ya es 8 pero el audio que se cierra
+            # es el de la línea 1 (el cliente que quedó en espera).
+            # ================================================================
+            $SeqOrd = @($ActiveLineSeq | Sort-Object Ms)
+            $LineaAudioActual = 0
+            $AudioRows = @()
+            foreach ($kAu in @($EventosTiempo.Keys | Sort-Object)) {
+                if (-not $EventosTiempo.ContainsKey($kAu)) { continue }
+                $oAu = $EventosTiempo[$kAu]
+                if ($oAu.Audio -notmatch "Línea abierta|Línea cerrada") { continue }
+                $msAu = & $MsDeSlot $kAu
+                if ($oAu.Audio -match "Línea abierta") {
+                    $btnAu = -1
+                    foreach ($ev in $SeqOrd) { if ($ev.Ms -le $msAu) { $btnAu = $ev.Btn } else { break } }
+                    if ($btnAu -ge 0 -and $LineaAppBtn.ContainsKey($btnAu)) { $LineaAudioActual = $LineaAppBtn[$btnAu] }
+                    $oAu.Audio = if ($LineaAudioActual -ge 1) { "$symMusic Audio abierto (línea $LineaAudioActual)" } else { "$symMusic Audio abierto" }
+                    $tipoAu = "A"
+                } else {
+                    $oAu.Audio = if ($LineaAudioActual -ge 1) { "$symStop Audio cerrado (línea $LineaAudioActual)" } else { "$symStop Audio cerrado" }
+                    $tipoAu = "C"
+                }
+                $AudioRows += [pscustomobject]@{ Slot = $kAu; Ms = $msAu; Tipo = $tipoAu; Linea = $LineaAudioActual }
+            }
+
+            # RENEGOCIACIÓN DE MEDIOS: un "cerrado → abierto" en la MISMA línea con <1 s de diferencia no
+            # es una acción del asesor: es Avaya cortando y reabriendo el canal H.245 (StopMedia + fast-start
+            # OLC), típicamente al conectar con el destino. Se colapsan las dos filas en un solo evento claro.
+            # (Un cerrado línea 1 → abierto línea 2 es un cambio de línea real y NO se colapsa.)
+            for ($iAu = 0; $iAu -lt ($AudioRows.Count - 1); $iAu++) {
+                $aC = $AudioRows[$iAu]; $aA = $AudioRows[$iAu + 1]
+                $gap = $aA.Ms - $aC.Ms
+                if ($aC.Tipo -eq "C" -and $aA.Tipo -eq "A" -and $aC.Linea -ge 1 -and $aC.Linea -eq $aA.Linea -and
+                    $aC.Ms -ge 0 -and $gap -ge 0 -and $gap -le 1000) {
+                    $oC = $EventosTiempo[$aC.Slot]; $oA = $EventosTiempo[$aA.Slot]
+                    $oC.Audio      = "↻ Avaya renegoció el audio (línea $($aC.Linea))"
+                    $oC.ColorAudio = [System.Drawing.Color]::DeepSkyBlue
+                    $oC.RawAudio  += $oA.RawAudio
+                    $oA.Audio      = ""; $oA.ColorAudio = [System.Drawing.Color]::White
+                    $iAu++   # el par ya se consumió
+                }
+            }
+
+            # ================================================================
+            # DTMF: agrupar las pulsaciones del asesor en secuencias legibles.
+            # Se agrupan las pulsaciones consecutivas de la MISMA sesión con hueco ≤12 s (el
+            # asesor marca en ráfaga). Cada grupo → una fila en la columna DTMF con la secuencia
+            # (ej: "⌨ #*1234567890"); el detalle por dígito con su ms queda en el RAW de la celda.
+            # ================================================================
+            if ($DtmfPresses.Count -gt 0) {
+                # Emisión DIRECTA (sin arrays anidados, que en PS 5.1 se aplanan y fragmentan la secuencia).
+                # Se acumula la secuencia y se "cierra" el grupo al cambiar de sesión o superar 12 s de hueco.
+                $ordDt = @($DtmfPresses | Sort-Object { & $MsDeSlot $_.Hora })
+                $seqDt = ""; $slotDt = $null; $sesDt = $null; $prevMsDt = -1; $rawDt = ""
+                foreach ($prDt in $ordDt) {
+                    $msDt = & $MsDeSlot $prDt.Hora
+                    if ($seqDt -ne "" -and ($prDt.Ses -ne $sesDt -or ($msDt - $prevMsDt) -gt 12000)) {
+                        Init-Hora $slotDt
+                        $durSeqDt = [math]::Round(($prevMsDt - (& $MsDeSlot $slotDt)) / 1000)
+                        $sufSeqDt = if ($durSeqDt -ge 1) { " (tecleado en ${durSeqDt}s)" } else { "" }
+                        $EventosTiempo[$slotDt].Dtmf      = "⌨ $seqDt$sufSeqDt"
+                        $EventosTiempo[$slotDt].ColorDtmf = [System.Drawing.Color]::Aqua
+                        if ($EventosTiempo[$slotDt].Sesion -eq "-") { $EventosTiempo[$slotDt].Sesion = $sesDt }
+                        $EventosTiempo[$slotDt].RawDtmf   = "Pulsaciones DTMF del asesor (sesión $sesDt), tecleado en ${durSeqDt}s:`n$rawDt".TrimEnd()
+                        $seqDt = ""; $rawDt = ""
+                    }
+                    if ($seqDt -eq "") { $slotDt = $prDt.Hora; $sesDt = $prDt.Ses }
+                    $seqDt += $prDt.Sim
+                    $rawDt += "$($prDt.Hora)  →  $($prDt.Sim)`n"
+                    $prevMsDt = $msDt
+                }
+                if ($seqDt -ne "") {
+                    Init-Hora $slotDt
+                    $durSeqDt = [math]::Round(($prevMsDt - (& $MsDeSlot $slotDt)) / 1000)
+                    $sufSeqDt = if ($durSeqDt -ge 1) { " (tecleado en ${durSeqDt}s)" } else { "" }
+                    $EventosTiempo[$slotDt].Dtmf      = "⌨ $seqDt$sufSeqDt"
+                    $EventosTiempo[$slotDt].ColorDtmf = [System.Drawing.Color]::Aqua
+                    if ($EventosTiempo[$slotDt].Sesion -eq "-") { $EventosTiempo[$slotDt].Sesion = $sesDt }
+                    $EventosTiempo[$slotDt].RawDtmf   = "Pulsaciones DTMF del asesor (sesión $sesDt), tecleado en ${durSeqDt}s:`n$rawDt".TrimEnd()
+                }
+            }
+
+            # ================================================================
+            # "Asesor captura [número] y da Enter": inyectar el número tecleado.
+            # Cada NewCallHandler (PASO 4) se empareja con el ApplyDialingRulesToNumber
+            # más cercano posterior (≤8 s) del EndpointLog, que trae el número ya listo
+            # para marcar (con prefijo de salida). Cada número se consume una sola vez.
+            # ================================================================
+            # Cubre DOS eventos que nacen igual (número tecleado + Enter, resuelto por ApplyDialingRulesToNumber):
+            #   · NewCallHandler  → "Asesor captura N y da Enter"       (llamada nueva desde la caja)
+            #   · AddCallHandler  → "El asesor agregó una llamada (consulta) al N"  (2ª llamada para transferir/conf.)
+            # Se procesan juntos, ordenados por tiempo, consumiendo cada número una sola vez ($usadoAD).
+            if (($NewCallSlots.Count + $AddCallSlots.Count) -gt 0 -and $DialedApply.Count -gt 0) {
+                $ordAD = @($DialedApply | Sort-Object Ms)
+                $usadoAD = @{}
+                $candNum = @()
+                foreach ($s in $NewCallSlots) { $candNum += [pscustomobject]@{ Slot = $s; Tipo = "NEW" } }
+                foreach ($s in $AddCallSlots) { $candNum += [pscustomobject]@{ Slot = $s; Tipo = "ADD" } }
+                foreach ($cn in ($candNum | Sort-Object { & $MsDeSlot $_.Slot })) {
+                    $slotNC = $cn.Slot
+                    if (-not $EventosTiempo.ContainsKey($slotNC)) { continue }
+                    $agC = $EventosTiempo[$slotNC].Agente
+                    if ($cn.Tipo -eq "NEW" -and $agC -notmatch "Asesor captura número y da Enter") { continue }
+                    if ($cn.Tipo -eq "ADD" -and $agC -notmatch "agregó una llamada \(consulta\)") { continue }
+                    $msNC = & $MsDeSlot $slotNC
+                    if ($msNC -lt 0) { continue }
+                    for ($iAD = 0; $iAD -lt $ordAD.Count; $iAD++) {
+                        if ($usadoAD[$iAD]) { continue }
+                        $dltAD = $ordAD[$iAD].Ms - $msNC
+                        if ($dltAD -ge -500 -and $dltAD -le 8000) {
+                            if ($cn.Tipo -eq "NEW") { $EventosTiempo[$slotNC].Agente = "$symUp Asesor captura $($ordAD[$iAD].Num) y da Enter" }
+                            else                    { $EventosTiempo[$slotNC].Agente = "$symArr El asesor agregó una llamada (consulta) al $($ordAD[$iAD].Num)" }
+                            $usadoAD[$iAD] = $true
+                            break
+                        }
+                    }
+                }
+            }
+
+            # ================================================================
+            # CASO "LOGEO AUTÓNOMO": cierre normal vs caída de red + reconexión automática.
+            # Un MISMO log puede tener VARIAS sesiones el mismo día → se COLAPSA cada lista por
+            # episodios (nuevo episodio cuando el hueco supera el umbral) y se emite UNA fila por
+            # episodio en "Log de Sistema". Verde = acción del asesor (cierre); naranja/amarillo =
+            # caída/recuperación de red; cyan = reconexión AUTOMÁTICA (bLInkRecovery=1 → app ABIERTA).
+            # ================================================================
+            # Colapsa una lista de @{Slot;Raw} en episodios: devuelve el PRIMER elemento de cada racha
+            # (parse de ms autónomo para no depender del scope externo).
+            $ColapsarEpisodios = {
+                param($lista, $gapMs)
+                $conMs = foreach ($it in @($lista)) {
+                    $ms = -1
+                    if ($it.Slot -match '^(\d{2}:\d{2}:\d{2})[,:]?(\d{1,3})?$') {
+                        try { $ms = [int]([datetime]::ParseExact($matches[1],'HH:mm:ss',$null).TimeOfDay.TotalSeconds) * 1000 + [int]($matches[2]) } catch { $ms = -1 }
+                    }
+                    [pscustomobject]@{ Slot = $it.Slot; Raw = $it.Raw; Ms = $ms }
+                }
+                $res = @(); $lastMs = -999999999
+                foreach ($it in (@($conMs) | Where-Object { $_.Ms -ge 0 } | Sort-Object Ms)) {
+                    if (($it.Ms - $lastMs) -gt $gapMs) { $res += $it }
+                    $lastMs = $it.Ms
+                }
+                return @($res)
+            }
+            $GAP_CIERRE = 30000   # 30 s: separa cierres/desfirmes distintos (las señales internas de un cierre caen juntas)
+            $GAP_RED    = 90000   # 90 s: un episodio de caída/recuperación dura minutos con huecos ~19 s → un solo episodio
+            $cierreMsAll = @(@($CierreAppList) | ForEach-Object { & $MsDeSlot $_.Slot })
+
+            # 1) Desfirme manual — SOLO si NO va pegado a un cierre de app (±15 s). Si hay cierre cerca, el
+            #    desfirme es parte del cierre (la fila de CIERRE ya lo cuenta) → no se duplica. Un desfirme
+            #    "solo" (el asesor se desfirma pero deja la app abierta) SÍ se muestra.
+            foreach ($ep in (& $ColapsarEpisodios $DesfirmeManualList $GAP_CIERRE)) {
+                $dm = & $MsDeSlot $ep.Slot
+                $pegadoCierre = $false
+                foreach ($cm in $cierreMsAll) { if ($cm -ge 0 -and [math]::Abs($cm - $dm) -le 15000) { $pegadoCierre = $true; break } }
+                if ($pegadoCierre) { continue }
+                Init-Hora $ep.Slot
+                if ($EventosTiempo[$ep.Slot].SysLog -eq "") {
+                    $EventosTiempo[$ep.Slot].SysLog   = "✔ DESFIRME MANUAL: el asesor cerró sesión (dejó la app abierta)"
+                    $EventosTiempo[$ep.Slot].ColorSys = [System.Drawing.Color]::LightGreen
+                    $EventosTiempo[$ep.Slot].RawSysLog += "¿Por qué? Se cerró sesión con desfirme manual (requestor='manual') sin cerrar la aplicación:`n$($ep.Raw)`n"
+                    if ($EventosTiempo[$ep.Slot].Tel -eq "-") { $EventosTiempo[$ep.Slot].Tel = "RED/AVAYA" }
+                }
+            }
+            # 2) Cierre de la aplicación (una fila por episodio). Se distingue:
+            #    • CIERRE NORMAL: el asesor se desfirmó (menú) y luego cerró. Sin EnterAuxHandler cercano.
+            #    • CERRÓ CON X SIN DESFIRMARSE: la app tuvo que estacionarlo en Aux porque seguía DISPONIBLE
+            #      al dar la X (EnterAuxHandler / oldState=Ready→LoggedOut dentro del episodio).
+            $firmadoMs = @(@($CierreFirmadoList) | ForEach-Object { & $MsDeSlot $_.Slot })
+            # EPISODIOS DE CIERRE: un cierre puede TARDAR y llevar VARIOS clics si la app se colgó (caso real:
+            # 3 intentos en 48 s por el bug de auto-answer). Por eso el episodio NO se corta por ventana de
+            # tiempo (30 s lo partía en dos filas contradictorias), sino que se cierra en el apagado definitivo
+            # (Shutdown/PhoneService shutdown). Se cuentan los clics para reportar "N intentos".
+            $CierreEpisodios = @(); $curIniC = $null; $curRawC = ""; $curIntC = 0; $curUltC = -1; $ultFinC = -999999
+            foreach ($itC in (@(@($CierreAppList) | Sort-Object { & $MsDeSlot $_.Slot }))) {
+                $mC = & $MsDeSlot $itC.Slot
+                if ($mC -lt 0) { continue }
+                # Corte de seguridad: si pasan >5 min sin apagado definitivo, se asume episodio abandonado.
+                if ($null -ne $curIniC -and ($mC - $curUltC) -gt 300000) {
+                    $CierreEpisodios += [pscustomobject]@{ Slot=$curIniC; Raw=$curRawC; Intentos=$curIntC; FinMs=$curUltC; Confirmado=$false }; $curIniC = $null
+                }
+                if ($null -eq $curIniC) {
+                    # El apagado emite DOS señales de fin juntas (Shutdown() y PhoneService shutdown). La segunda
+                    # es cola del mismo cierre, no un cierre nuevo → ignorarla en vez de abrir episodio fantasma.
+                    if (($mC - $ultFinC) -le 5000) { $curUltC = $mC; continue }
+                    $curIniC = $itC.Slot; $curRawC = $itC.Raw; $curIntC = 0
+                }
+                if ($itC.Tipo -eq "inicio") { $curIntC++ }
+                $curUltC = $mC
+                if ($itC.Tipo -eq "fin") {
+                    # Confirmado=$true: llegó el apagado DEFINITIVO (Shutdown()/PhoneService shutdown) = el
+                    # proceso terminó de verdad. Es la GARANTÍA de que el OneX se cerró (no solo se pidió).
+                    $CierreEpisodios += [pscustomobject]@{ Slot=$curIniC; Raw=$curRawC; Intentos=$curIntC; FinMs=$curUltC; Confirmado=$true }
+                    $ultFinC = $mC; $curIniC = $null
+                }
+            }
+            # Episodio que quedó ABIERTO al final: hubo ExitHandler pero NO llegó el apagado definitivo
+            # (Shutdown/PhoneService shutdown) → NO confirmado. Puede ser: app colgada, el asesor canceló el
+            # cierre, o (frecuente) la extracción cortó antes del apagado. NO se afirma que se cerró.
+            if ($null -ne $curIniC) { $CierreEpisodios += [pscustomobject]@{ Slot=$curIniC; Raw=$curRawC; Intentos=$curIntC; FinMs=$curUltC; Confirmado=$false } }
+
+            foreach ($ep in $CierreEpisodios) {
+                Init-Hora $ep.Slot
+                if ($EventosTiempo[$ep.Slot].SysLog -ne "") { continue }
+                $cm = & $MsDeSlot $ep.Slot
+                $cfin = if ($ep.FinMs -ge $cm) { $ep.FinMs } else { $cm }
+                # La señal de "firmado al cerrar" se busca en TODO el tramo del cierre (no solo en el primer
+                # clic): si la app se colgó, el desfirme forzado llega decenas de segundos después.
+                $firmado = $false
+                foreach ($pm in $firmadoMs) { if ($pm -ge 0 -and $pm -ge ($cm - 200) -and $pm -le ($cfin + 5000)) { $firmado = $true; break } }
+                # Sufijo SOLO cuando el cierre costó trabajo de verdad (app colgada). En un cierre sano OneX
+                # dispara ExitHandler 2 veces en ~1 s, así que se exige además que el tramo dure >=5 s.
+                $durC = [int](($cfin - $cm) / 1000)
+                $sufC = if ($ep.Intentos -gt 1 -and $durC -ge 5) { " — $($ep.Intentos) intentos en ${durC}s (la app no respondía)" } else { "" }
+                # $ep.Confirmado = llegó el apagado DEFINITIVO (Shutdown()/PhoneService shutdown) = garantía de que
+                # el proceso terminó. Sin él, solo hubo ExitHandler = "cierre iniciado" (no se puede afirmar que cerró).
+                if (-not $ep.Confirmado) {
+                    $EventosTiempo[$ep.Slot].SysLog   = "⚠ CIERRE INICIADO (apagado NO confirmado): hubo ExitHandler pero no llegó el Shutdown$sufC"
+                    $EventosTiempo[$ep.Slot].ColorSys = [System.Drawing.Color]::Khaki
+                    $EventosTiempo[$ep.Slot].RawSysLog += "¿Por qué? Se pidió cerrar (ExitHandler) pero NO apareció el apagado definitivo (Begin Executing method Shutdown() / PhoneService shutdown). Puede ser: app colgada, cierre cancelado, o la extracción cortó antes del apagado. NO se puede garantizar que el OneX se cerró. Clics de cerrar: $($ep.Intentos).`n$($ep.Raw)`n"
+                } elseif ($firmado) {
+                    $EventosTiempo[$ep.Slot].SysLog   = "⚠ APP CERRADA (confirmado) con asesor FIRMADO: se cerró el OneX estando el asesor disponible$sufC"
+                    $EventosTiempo[$ep.Slot].ColorSys = [System.Drawing.Color]::Orange
+                    $EventosTiempo[$ep.Slot].RawSysLog += "¿Por qué? Apagado DEFINITIVO confirmado (Shutdown/PhoneService shutdown), y el cierre desfirmó a un agente que seguía firmado (EnterAuxHandler / transición Ready→LoggedOut DENTRO del tramo de cierre). Clics de cerrar: $($ep.Intentos); el apagado llegó ${durC}s después del primero.`n$($ep.Raw)`n"
+                } else {
+                    $EventosTiempo[$ep.Slot].SysLog   = "✔ APP CERRADA (confirmado): el asesor se desfirmó y luego cerró el OneX$sufC"
+                    $EventosTiempo[$ep.Slot].ColorSys = [System.Drawing.Color]::LightGreen
+                    $EventosTiempo[$ep.Slot].RawSysLog += "¿Por qué? Apagado DEFINITIVO confirmado (Shutdown/PhoneService shutdown), con requestor='manual' + closeSignalingChannel cat:0/cod:0 (cierre limpio, NO caída de red). El asesor ya estaba desfirmado al cerrar (desfirme ANTES del cierre). Clics de cerrar: $($ep.Intentos).`n$($ep.Raw)`n"
+                }
+                if ($EventosTiempo[$ep.Slot].Tel -eq "-") { $EventosTiempo[$ep.Slot].Tel = "RED/AVAYA" }
+            }
+            # 3) Caída de red (una fila por episodio)
+            foreach ($ep in (& $ColapsarEpisodios $RedCaidaList $GAP_RED)) {
+                Init-Hora $ep.Slot
+                if ($EventosTiempo[$ep.Slot].SysLog -eq "") {
+                    $EventosTiempo[$ep.Slot].SysLog   = "⚠ CAÍDA DE RED: se perdió el enlace con Avaya (la aplicación seguía ABIERTA)"
+                    $EventosTiempo[$ep.Slot].ColorSys = [System.Drawing.Color]::Orange
+                    $EventosTiempo[$ep.Slot].RawSysLog += "¿Por qué? El canal se cerró por timeout de red (cat:2/cod:10060) o falló el keepalive al gatekeeper:`n$($ep.Raw)`n"
+                    if ($EventosTiempo[$ep.Slot].Tel -eq "-") { $EventosTiempo[$ep.Slot].Tel = "RED/AVAYA" }
+                }
+            }
+            # 4) Recuperación de enlace en curso (una fila por episodio). OJO: LinkRecoveryProgressEvent
+            #    TAMBIÉN aparece en un LOGIN NORMAL (handshake H.323 de registro) → solo se muestra si hubo
+            #    una CAÍDA de red en los ~10 min previos. Sin caída = login normal → se suprime (falso positivo).
+            $redMsAll = @(@($RedCaidaList) | ForEach-Object { & $MsDeSlot $_.Slot })
+            foreach ($ep in (& $ColapsarEpisodios $ReconIntentoList $GAP_RED)) {
+                $im = & $MsDeSlot $ep.Slot
+                $trasCaida = $false
+                foreach ($rm in $redMsAll) { if ($rm -ge 0 -and ($im - $rm) -ge 0 -and ($im - $rm) -le 600000) { $trasCaida = $true; break } }
+                if (-not $trasCaida) { continue }
+                Init-Hora $ep.Slot
+                if ($EventosTiempo[$ep.Slot].SysLog -eq "") {
+                    $EventosTiempo[$ep.Slot].SysLog   = "↻ Avaya intentando reconectar automáticamente (recuperación de enlace)"
+                    $EventosTiempo[$ep.Slot].ColorSys = [System.Drawing.Color]::Khaki
+                    $EventosTiempo[$ep.Slot].RawSysLog += "¿Por qué? Tras una caída de red, la app dispara eventos de progreso de recuperación de enlace:`n$($ep.Raw)`n"
+                    if ($EventosTiempo[$ep.Slot].Tel -eq "-") { $EventosTiempo[$ep.Slot].Tel = "RED/AVAYA" }
+                }
+            }
+            # 5) Reconexión AUTOMÁTICA exitosa (una fila por episodio): bLInkRecovery=1 = la app estaba ABIERTA.
+            foreach ($ep in (& $ColapsarEpisodios $ReconOkList $GAP_RED)) {
+                Init-Hora $ep.Slot
+                if ($EventosTiempo[$ep.Slot].SysLog -eq "") {
+                    $EventosTiempo[$ep.Slot].SysLog   = "✔ RECONEXIÓN AUTOMÁTICA (bLInkRecovery=1): la app estaba ABIERTA — NO fue un login manual"
+                    $EventosTiempo[$ep.Slot].ColorSys = [System.Drawing.Color]::Cyan
+                    $EventosTiempo[$ep.Slot].RawSysLog += "¿Por qué? El login se completó con bLInkRecovery=1 (recuperación de enlace de una sesión ya viva). Un login manual o un arranque tras reinicio sería bLInkRecovery=0:`n$($ep.Raw)`n"
+                    if ($EventosTiempo[$ep.Slot].Tel -eq "-") { $EventosTiempo[$ep.Slot].Tel = "RED/AVAYA" }
+                }
+            }
+            # 6) Re-firma automática del agente: SOLO si hay una reconexión (bLInkRecovery) cercana (±120 s).
+            $reconOkMs = @(@($ReconOkList) | ForEach-Object { & $MsDeSlot $_.Slot })
+            foreach ($ep in (& $ColapsarEpisodios $ReconRefirmaList $GAP_RED)) {
+                $rm = & $MsDeSlot $ep.Slot
+                $cerca = $false
+                foreach ($okm in $reconOkMs) { if ($okm -ge 0 -and [math]::Abs($okm - $rm) -le 120000) { $cerca = $true; break } }
+                if (-not $cerca) { continue }
+                Init-Hora $ep.Slot
+                if ($EventosTiempo[$ep.Slot].SysLog -eq "") {
+                    $EventosTiempo[$ep.Slot].SysLog   = "✔ Agente re-firmado automáticamente por la reconexión (sin intervención del asesor)"
+                    $EventosTiempo[$ep.Slot].ColorSys = [System.Drawing.Color]::Cyan
+                    $EventosTiempo[$ep.Slot].RawSysLog += "¿Por qué? Tras la recuperación de enlace, Avaya re-firma al agente automáticamente:`n$($ep.Raw)`n"
+                    if ($EventosTiempo[$ep.Slot].Tel -eq "-") { $EventosTiempo[$ep.Slot].Tel = "RED/AVAYA" }
+                }
+            }
+            # 7) Hilo interno abortado: SOLO es aviso si NO hubo un cierre de app cercano (±60 s). Si el
+            #    abort fue parte del teardown de un cierre, se SUPRIME (la fila de CIERRE ya lo cuenta).
+            $cierreMs = @(@($CierreAppList) | ForEach-Object { & $MsDeSlot $_.Slot })
+            foreach ($ep in (& $ColapsarEpisodios $HiloAbortadoList $GAP_CIERRE)) {
+                $hm = & $MsDeSlot $ep.Slot
+                $cerca = $false
+                foreach ($cm in $cierreMs) { if ($cm -ge 0 -and [math]::Abs($cm - $hm) -le 60000) { $cerca = $true; break } }
+                if ($cerca) { continue }
+                Init-Hora $ep.Slot
+                if ($EventosTiempo[$ep.Slot].AppLog -eq "") {
+                    $EventosTiempo[$ep.Slot].AppLog   = "Aviso: hilo interno abortado (recuperación de red / reinicio de servicio) — la app NO se cerró"
+                    $EventosTiempo[$ep.Slot].ColorApp = [System.Drawing.Color]::Orange
+                    $EventosTiempo[$ep.Slot].RawAppLog += "¿Por qué? Avaya abortó un hilo interno pero NO hubo Shutdown/ExitHandler cercano → la app siguió abierta:`n$($ep.Raw)`n"
+                }
             }
 
             # ================================================================
@@ -2474,10 +3490,33 @@ $btnAnalizar.Add_Click({
             # Guard: solo actúa si el slot no tiene ya un HOLD/UNHOLD en la columna Agente.
             # ================================================================
             foreach ($SesH in $HoldImplicito.Keys) {
-                $HoraH = $HoldImplicito[$SesH]
+              foreach ($HoraH in @($HoldImplicito[$SesH])) {
+                # Guard anti-duplicado (caso mdelacruz 06/07/2026): si en el MISMO segundo y la MISMA sesión
+                # ya existe un "HOLD MANUAL" (el clic vive en su ms-slot, Categoría A), este Active→Inactive
+                # es el ECO de ese clic, NO un hold automático → no duplicar. El automático REAL (sin clic)
+                # no tiene HOLD MANUAL en el segundo, así que sigue detectándose normal.
+                $segHImp = ($HoraH -split ',')[0]
+                $HayHoldManualSes = $false
+                foreach ($kHi in @($EventosTiempo.Keys)) {
+                    if ((($kHi -split ',')[0] -eq $segHImp) -and $EventosTiempo[$kHi].Agente -match "\bHOLD MANUAL" -and $EventosTiempo[$kHi].Sesion -eq $SesH) { $HayHoldManualSes = $true; break }
+                }
+                if ($HayHoldManualSes) { continue }
                 if ($EventosTiempo.ContainsKey($HoraH) -and $EventosTiempo[$HoraH].Agente -notmatch "HOLD") {
                     $TelH = if ($MapeoTel[$SesH]) { $MapeoTel[$SesH] } elseif ($MapeoTelP4[$SesH]) { $MapeoTelP4[$SesH] } else { "" }
-                    $HoldNote = if ($SesionesBridge.Count -gt 0) { "|| Hold automático del sistema ⚠ bridge activo (Sesión $SesH)" } else { "|| Hold automático del sistema (Sesión $SesH)" }
+                    $msHi = & $MsDeSlot $HoraH
+                    # ¿Hold DEL ASESOR? "Begin Executing method Hold(ConnId=SesH)" en el mismo instante que este
+                    # cambio Active→Inactive. Ambas líneas traen el ConnId, pero se exige también proximidad
+                    # temporal (los IDs se reciclan por login). La ventana NO es una duración de hold: es
+                    # tolerancia de jitter entre dos líneas del MISMO evento (en la práctica ~9 ms de diferencia).
+                    # Si existe el método → el asesor retuvo; si no → auto-hold del sistema (abrir 2da línea).
+                    $esHoldAgente = $false
+                    if ($HoldMetodoSes.ContainsKey($SesH)) {
+                        foreach ($sHM in $HoldMetodoSes[$SesH]) { $mHM = & $MsDeSlot $sHM; if ($mHM -ge 0 -and $msHi -ge 0 -and [math]::Abs($mHM - $msHi) -le 1500) { $esHoldAgente = $true; break } }
+                    }
+                    # NOTA: se quitó el sufijo "⚠ bridge activo" (Pablo, 27/07): dependía de una ventana ±60 s
+                    # arbitraria y daba falsos positivos. Si hay un bridge real, ya sale en su propia fila
+                    # ("Sesión bridge del sistema"); el hold no necesita editorializar sobre eso.
+                    $HoldNote = if ($esHoldAgente) { "$symPause Asesor pone la llamada en espera (Sesión $SesH)" } else { "|| Hold automático del sistema (Sesión $SesH)" }
                     if ($EventosTiempo[$HoraH].Agente -ne "") {
                         # El slot ya tiene otro evento en la columna Agente (ej: TRANSFERENCIA INICIADA).
                         # En vez de amontonar ambos en la misma celda con " || ", se le da al Hold automático
@@ -2497,6 +3536,72 @@ $btnAnalizar.Add_Click({
                         if ($EventosTiempo[$HoraH].Sesion -eq "-" -and $TelH -ne "") { $EventosTiempo[$HoraH].Tel = $TelH }
                     }
                 }
+              }
+            }
+
+            # ── Reetiquetar el AutoHold que dispara "Agregar llamada" o "captura número nuevo" ──────
+            # DOS botones ponen la llamada actual en AutoHold para abrir línea antes de marcar/consultar:
+            # AddCallHandler ("Agregar llamada") y NewCallHandler (el asesor teclea un número NUEVO en la
+            # caja de texto y da Enter estando YA en una llamada). Ese hold llega unos ms después y sale
+            # como "HOLD MANUAL (Clic del Agente)" SIN confirmación de clic (no hay HoldCallHandler cerca),
+            # aunque NO fue un clic de hold suelto — fue consecuencia del otro botón. Si un "HOLD MANUAL"
+            # coincide (±1500 ms) con cualquiera de los dos, se reetiqueta según cuál lo disparó, para que
+            # el análisis no lo confunda con un hold manual independiente. Se fija también la Interpretación
+            # porque al quitar "HOLD MANUAL" del Agente el render ya no la calcularía.
+            # (Pablo: caso 21:51:17 = Agregar llamada; caso 15:37:42 = captura de número nuevo.)
+            if (($AddCallSlots.Count + $NewCallSlots.Count) -gt 0) {
+                foreach ($kHA in @($EventosTiempo.Keys)) {
+                    $oHA = $EventosTiempo[$kHA]
+                    if ($null -eq $oHA -or $oHA -isnot [hashtable]) { continue }
+                    if ($oHA.Agente -notmatch "HOLD MANUAL \(Clic del Agente\)") { continue }
+                    $mHA = & $MsDeSlot $kHA
+                    if ($mHA -lt 0) { continue }
+                    $cercaAdd = $false; $cercaNew = $false
+                    foreach ($sAc in $AddCallSlots) { $mAc = & $MsDeSlot $sAc; if ($mAc -ge 0 -and [math]::Abs($mHA - $mAc) -le 1500) { $cercaAdd = $true; break } }
+                    if (-not $cercaAdd) {
+                        foreach ($sNc in $NewCallSlots) { $mNc = & $MsDeSlot $sNc; if ($mNc -ge 0 -and [math]::Abs($mHA - $mNc) -le 1500) { $cercaNew = $true; break } }
+                    }
+                    if ($cercaAdd -or $cercaNew) {
+                        $causaAutoHold = if ($cercaAdd) { "Agregar llamada" } else { "captura de número nuevo" }
+                        $oHA.Agente               = "|| Hold automático (por $causaAutoHold)"
+                        $oHA.ColorAgente          = [System.Drawing.Color]::Yellow
+                        $oHA.Interpretacion       = "Llamada en Hold (por $causaAutoHold)"
+                        $oHA.ColorInterpretacion  = [System.Drawing.Color]::Yellow
+                    }
+                }
+            }
+
+            # ================================================================
+            # SWEEP RETOMAR: OldState=Inactive,NewState=Active = la llamada sale del hold.
+            # Ocurre al volver a una línea que tenía una llamada en espera. Guard: si en el mismo
+            # segundo y misma sesión ya hay un UNHOLD MANUAL (clic del asesor), ese evento manda.
+            # ================================================================
+            foreach ($SesR in $RetomaImplicita.Keys) {
+                foreach ($HoraR in @($RetomaImplicita[$SesR])) {
+                    if (-not $EventosTiempo.ContainsKey($HoraR)) { continue }
+                    $segR = ($HoraR -split ',')[0]
+                    $HayUnholdManual = $false
+                    foreach ($kRi in @($EventosTiempo.Keys)) {
+                        if ((($kRi -split ',')[0] -ne $segR) -or [string]::IsNullOrEmpty($EventosTiempo[$kRi].Agente)) { continue }
+                        # (a) clic real de UNHOLD del asesor en esta sesión  (b) retomado automático tras fallo de transferencia
+                        if (($EventosTiempo[$kRi].Agente -match "UNHOLD" -and $EventosTiempo[$kRi].Sesion -eq $SesR) -or
+                            ($EventosTiempo[$kRi].Agente -match "retomada autom")) { $HayUnholdManual = $true; break }
+                    }
+                    if ($HayUnholdManual) { continue }
+                    if ($EventosTiempo[$HoraR].Agente -match "HOLD|UNHOLD") { continue }
+                    $TelR = if ($MapeoTel[$SesR]) { $MapeoTel[$SesR] } elseif ($MapeoTelP4[$SesR]) { $MapeoTelP4[$SesR] } else { "" }
+                    $SlotR2 = $HoraR
+                    if ($EventosTiempo[$HoraR].Agente -ne "") {
+                        $bhR = $HoraR; $mbR = 0
+                        if ($HoraR -match "^(\d{2}:\d{2}:\d{2}),(\d+)$") { $bhR = $matches[1]; $mbR = [int]$matches[2] }
+                        for ($msR = $mbR + 1; $msR -le 999; $msR++) { $candR = "$bhR,$msR"; if (-not $EventosTiempo.ContainsKey($candR)) { $SlotR2 = $candR; break } }
+                        Init-Hora $SlotR2
+                    }
+                    $EventosTiempo[$SlotR2].Agente      = "$symRes Llamada retomada del hold (Sesión $SesR)"
+                    $EventosTiempo[$SlotR2].ColorAgente = [System.Drawing.Color]::LightGoldenrodYellow
+                    $EventosTiempo[$SlotR2].Sesion      = $SesR
+                    if ($TelR -ne "" -and $EventosTiempo[$SlotR2].Tel -eq "-") { $EventosTiempo[$SlotR2].Tel = $TelR }
+                }
             }
 
             # ================================================================
@@ -2504,8 +3609,128 @@ $btnAnalizar.Add_Click({
             # La sesión bridge se crea con RemoteParty=[,] (sin destino real). Si la sesión
             # nunca obtuvo un teléfono real (quedó phantom, ej: legs de transferencia 4/5) se
             # suprime la fila; si terminó siendo una llamada real (ej: saliente a una extensión)
-            # se conserva el marcador. La nota "⚠ bridge activo" del Hold ya cubre el caso phantom.
+            # se conserva el marcador.
             # ================================================================
+            $LineaVaciaSinMarcar = @{}   # sesión → $true: línea que el asesor abrió y no marcó → su FIN dirá "Cerró línea sin marcar"
+
+            # --- LÍNEA ABIERTA SIN MARCAR: dirigido por la CONFIRMACIÓN del endpoint ---
+            # Se maneja desde $SinDestinoFin ("this record has no far-end address"), NO desde la etiqueta
+            # "Sesión bridge". La fila de inicio puede haber quedado como "INICIO DE LLAMADA (Saliente)",
+            # "LÍNEA ABIERTA" o "Sesión bridge" según qué señal la creó; antes solo se miraba la bridge, así
+            # que en los casos que nacían como INICIO DE LLAMADA no se detectaba NADA. Aquí se busca la fila
+            # de inicio de la sesión sea cual sea su etiqueta.
+            foreach ($fdL in $SinDestinoFin) {
+                $sesL = $fdL.Ses
+                if (-not $sesL -or $sesL -eq "-") { continue }
+                $msFinL = & $MsDeSlot $fdL.Slot
+                if ($msFinL -lt 0) { continue }
+                # Fila de INICIO de esa sesión: la más cercana ANTERIOR al fin confirmado (los IDs se reciclan).
+                $slotIniL = $null; $msIniL = -1
+                foreach ($kL in @($EventosTiempo.Keys)) {
+                    $oL = $EventosTiempo[$kL]
+                    if ($oL.Sesion -ne $sesL) { continue }
+                    if ($oL.Interpretacion -notmatch "INICIO DE LLAMADA|Sesión bridge del sistema|LÍNEA ABIERTA") { continue }
+                    $mL = & $MsDeSlot $kL
+                    if ($mL -lt 0 -or $mL -gt $msFinL) { continue }
+                    if ($mL -gt $msIniL) { $msIniL = $mL; $slotIniL = $kL }
+                }
+                if (-not $slotIniL) { continue }
+                $durMsL = $msFinL - $msIniL
+                $durL = [int]($durMsL / 1000)
+                # >120 s = apareamiento erróneo (Avaya libera sola la línea sin marcar en ~60 s de timeout) → no tocar.
+                if ($durL -gt 120) { continue }
+                # <2 s = PATA PHANTOM (murió en milisegundos): típico del mecanismo de transferencia
+                # (Transfer_ActivateConsultCall crea una pata vacía que nace y muere en ~90 ms) o de un bridge
+                # interno. NO es tiempo muerto (un tiempo muerto real es el asesor con la línea abierta SEGUNDOS;
+                # verificado con prueba controlada plopezs 16/13: reales = 10-11 s). Se SUPRIME su fila preliminar
+                # "LÍNEA ABIERTA SIN MARCAR"/"Sesión bridge" (de la MISMA sesión, dentro de su ventana de vida) para
+                # que no contamine el reporte de tiempos muertos. El discriminador es la DURACIÓN, NO "hay llamada
+                # concurrente" (la prueba mostró tiempos muertos reales abiertos MIENTRAS otra llamada estaba en hold).
+                if ($durMsL -lt 2000) {
+                    foreach ($kPh in @($EventosTiempo.Keys)) {
+                        $oPh = $EventosTiempo[$kPh]
+                        if ($null -eq $oPh -or $oPh -isnot [hashtable] -or $oPh.Sesion -ne $sesL) { continue }
+                        if ($oPh.Interpretacion -notmatch "LÍNEA ABIERTA SIN MARCAR|Sesión bridge del sistema") { continue }
+                        $mPh = & $MsDeSlot $kPh
+                        if ($mPh -lt ($msIniL - 500) -or $mPh -gt ($msFinL + 500)) { continue }
+                        # Si la fila solo tenía la etiqueta phantom, se elimina; si trae otro contenido (audio,
+                        # error, etc.) solo se limpia la interpretación para no perder ese dato.
+                        if ($oPh.Agente -eq "" -and $oPh.Audio -eq "" -and $oPh.Aux -eq "" -and $oPh.SysLog -eq "" -and $oPh.AppLog -eq "" -and $oPh.Ispeac -eq "" -and $oPh.Dtmf -eq "") {
+                            $EventosTiempo.Remove($kPh) | Out-Null
+                        } else {
+                            $oPh.Interpretacion = ""; $oPh.ColorInterpretacion = [System.Drawing.Color]::White
+                        }
+                    }
+                    continue
+                }
+                $segIniL = ($slotIniL -split ',')[0]; $nLinL = 0
+                foreach ($offL in -1,0,1) {
+                    try { $sChkL = ([datetime]::ParseExact($segIniL,'HH:mm:ss',$null).AddSeconds($offL)).ToString('HH:mm:ss') } catch { $sChkL = $segIniL }
+                    if ($LineaAppPorSeg.ContainsKey($sChkL)) { $ltL = $LineaAppPorSeg[$sChkL]; if ($ltL -match '^[a-z]$') { $nLinL = [int][char]$ltL - [int][char]'a' + 1; break } }
+                }
+                $txtLinL = if ($nLinL -ge 1) { "línea $nLinL" } else { "una línea" }
+                $EventosTiempo[$slotIniL].Interpretacion      = "$symUp Abrió $txtLinL sin marcar (${durL}s)"
+                $EventosTiempo[$slotIniL].ColorInterpretacion = [System.Drawing.Color]::Gold
+                $EventosTiempo[$slotIniL].RawInterpretacion  += "[LÍNEA ABIERTA SIN MARCAR] Sesión $sesL abierta durante $durL s. CONFIRMADO por el endpoint: al cerrar el historial de la sesión avisó 'this record has no far-end address' = nunca se marcó ningún número.`n"
+                $LineaVaciaSinMarcar[$sesL] = $true
+                # Relabelar el FIN de ESTA instancia concreta. NO se puede marcar por número de sesión: Avaya
+                # RECICLA los IDs en cada login, así que un "abrió línea sin marcar" de la mañana marcaría
+                # como "cerró sin marcar" a TODAS las llamadas reales con ese mismo ID el resto del día.
+                # Se busca el FIN de esta sesión dentro de la ventana [inicio, fin confirmado + 5 s].
+                $slotFinV = $null; $bestDV = 1e18
+                foreach ($kFv in @($EventosTiempo.Keys)) {
+                    $oFv = $EventosTiempo[$kFv]
+                    if ($null -eq $oFv -or $oFv -isnot [hashtable]) { continue }
+                    if ($oFv.Sesion -ne $sesL) { continue }
+                    if ($oFv.Interpretacion -notmatch "FIN DE LLAMADA|CUELGUE MANUAL") { continue }
+                    $mFv = & $MsDeSlot $kFv
+                    if ($mFv -lt $msIniL -or $mFv -gt ($msFinL + 5000)) { continue }
+                    $dV = [math]::Abs($mFv - $msFinL)
+                    if ($dV -lt $bestDV) { $bestDV = $dV; $slotFinV = $kFv }
+                }
+                if ($slotFinV) {
+                    $EventosTiempo[$slotFinV].Interpretacion      = "$symStop Cerró línea sin marcar"
+                    $EventosTiempo[$slotFinV].ColorInterpretacion = [System.Drawing.Color]::Goldenrod
+                    $EventosTiempo[$slotFinV].RawInterpretacion  += "[CERRÓ LÍNEA SIN MARCAR] Cierre de la sesión $sesL abierta en $slotIniL (instancia acotada por tiempo; los IDs de sesión se reciclan en cada login).`n"
+                }
+            }
+
+            # ── Suprimir "LÍNEA ABIERTA SIN MARCAR" cuando la sesión SÍ resolvió un número real ──────────
+            # Una pata que nace vacía (RemoteParty=[,]) recibe la etiqueta preliminar "LÍNEA ABIERTA SIN
+            # MARCAR" en slot base; si el número REAL llega ~ms después (far-end address resuelto), un guard
+            # impide subir la etiqueta y queda como falso "sin marcar". Caso típico: el DESTINO de una
+            # transferencia (ej. ses 46 → 812-201-8319) cuando la pata phantom (ses 48, <2s) se llevó el
+            # registro de consulta. Como SÍ marcó, NO es tiempo muerto → se suprime la fila (Pablo eligió
+            # suprimir, caso 20:57:32). Se acota por tiempo (IDs reciclan): el número debe haberse resuelto
+            # dentro de [slot-3s, slot+10s] de la fila. A este punto los tiempos muertos REALES ya se
+            # reetiquetaron a "Abrió línea N sin marcar (Xs)" (arriba), así que no matchean y no se tocan.
+            if ($FarEndResueltoSlots.Count -gt 0) {
+                foreach ($kSM in @($EventosTiempo.Keys)) {
+                    $oSM = $EventosTiempo[$kSM]
+                    if ($null -eq $oSM -or $oSM -isnot [hashtable]) { continue }
+                    if ($oSM.Interpretacion -notmatch "LÍNEA ABIERTA SIN MARCAR") { continue }
+                    $sesSM = $oSM.Sesion
+                    if (-not $sesSM -or $sesSM -eq "-") { continue }
+                    $mSM = & $MsDeSlot $kSM
+                    if ($mSM -lt 0) { continue }
+                    $resolvioSM = $false
+                    foreach ($fr in $FarEndResueltoSlots) {
+                        if ($fr.Ses -ne $sesSM) { continue }
+                        $mFr = & $MsDeSlot $fr.Slot
+                        if ($mFr -ge 0 -and $mFr -ge ($mSM - 3000) -and $mFr -le ($mSM + 10000)) { $resolvioSM = $true; break }
+                    }
+                    if ($resolvioSM) {
+                        # Se elimina la fila (Pablo eligió suprimir); si trae un error de sistema/app se
+                        # preserva ese dato limpiando solo la interpretación falsa.
+                        if ($oSM.SysLog -eq "" -and $oSM.AppLog -eq "") {
+                            $EventosTiempo.Remove($kSM) | Out-Null
+                        } else {
+                            $oSM.Interpretacion = ""; $oSM.ColorInterpretacion = [System.Drawing.Color]::White
+                        }
+                    }
+                }
+            }
+
             foreach ($kB in @($EventosTiempo.Keys)) {
                 if (-not $EventosTiempo.ContainsKey($kB)) { continue }
                 if ($EventosTiempo[$kB].Interpretacion -match "Sesión bridge del sistema") {
@@ -2514,12 +3739,71 @@ $btnAnalizar.Add_Click({
                     # 565 = código de desfirme, no es un teléfono de cliente real → tratar como phantom
                     # para que el desfirme no muestre "[!] Sesión bridge del sistema".
                     $EsRealB = ($TelRealB -ne "" -and $TelRealB -notmatch "Desconocido" -and $TelRealB -notmatch "^565$")
+                    # Si esta sesión ya salió como "Abrió línea sin marcar" cerca en el tiempo, este bridge es
+                    # la MISMA acción contada dos veces → suprimirlo (Pablo, 28/07). Se acota por tiempo porque
+                    # los IDs se reciclan por login (un bridge real de otra hora con el mismo ID no se toca).
+                    if ($SesB -and $LineaVaciaSinMarcar.ContainsKey($SesB)) {
+                        $mBk = & $MsDeSlot $kB
+                        $hayAbrio = $false
+                        foreach ($kAb in @($EventosTiempo.Keys)) {
+                            $oAb = $EventosTiempo[$kAb]
+                            if ($null -eq $oAb -or $oAb -isnot [hashtable]) { continue }
+                            if ($oAb.Sesion -eq $SesB -and $oAb.Interpretacion -match "Abrió .*sin marcar") {
+                                $mAb = & $MsDeSlot $kAb
+                                if ($mBk -ge 0 -and $mAb -ge 0 -and [math]::Abs($mAb - $mBk) -le 30000) { $hayAbrio = $true; break }
+                            }
+                        }
+                        if ($hayAbrio) {
+                            $EventosTiempo[$kB].Interpretacion = ""
+                            $EventosTiempo[$kB].ColorInterpretacion = [System.Drawing.Color]::White
+                            if ($EventosTiempo[$kB].Agente -eq "" -and $EventosTiempo[$kB].AppLog -eq "" -and $EventosTiempo[$kB].SysLog -eq "" -and $EventosTiempo[$kB].Audio -eq "" -and $EventosTiempo[$kB].Ispeac -eq "") {
+                                $EventosTiempo.Remove($kB) | Out-Null
+                            }
+                        }
+                        continue
+                    }
                     if (-not $EsRealB) {
+                        # Lo que llega aquí es ruido del sistema: pata phantom de transferencia/conferencia o
+                        # bridge sin uso. Las líneas que el asesor abrió y NO marcó ya quedaron etiquetadas
+                        # arriba por la confirmación del endpoint ("this record has no far-end address"),
+                        # así que aquí solo se suprime.
                         $EventosTiempo[$kB].Interpretacion = ""
                         $EventosTiempo[$kB].ColorInterpretacion = [System.Drawing.Color]::White
                         if ($EventosTiempo[$kB].Agente -eq "" -and $EventosTiempo[$kB].AppLog -eq "" -and $EventosTiempo[$kB].SysLog -eq "" -and $EventosTiempo[$kB].Audio -eq "" -and $EventosTiempo[$kB].Ispeac -eq "") {
                             $EventosTiempo.Remove($kB) | Out-Null
                         }
+                    }
+                }
+            }
+            # (El FIN de cada línea vacía ya se reetiquetó arriba, acotado a SU instancia. Antes había aquí un
+            #  barrido global por número de sesión que, con los IDs reciclados en cada login, marcaba como
+            #  "Cerró línea sin marcar" a llamadas reales —incluso contestadas— de otras horas del día.)
+
+            # --- OMITIR "INICIO DE SESIÓN (Interna/Sistema)" redundante (Pablo, 28/07): es un precursor que
+            #     aparece ~2 s antes del "INICIO DE LLAMADA" real de la MISMA sesión y no aporta. Si la sesión
+            #     tiene un INICIO DE LLAMADA cercano en el tiempo, se quita esta fila. Se acota por tiempo por
+            #     el reciclaje de IDs. Se respeta "INICIO DE SESIÓN (Llamada Interna — Extensión N)". ---
+            foreach ($kIS in @($EventosTiempo.Keys)) {
+                if (-not $EventosTiempo.ContainsKey($kIS)) { continue }
+                $oIS = $EventosTiempo[$kIS]
+                if ($null -eq $oIS -or $oIS -isnot [hashtable]) { continue }
+                if ($oIS.Interpretacion -notmatch "INICIO DE SESIÓN \(Interna/Sistema\)") { continue }
+                $sesIS = $oIS.Sesion; if (-not $sesIS -or $sesIS -eq "-") { continue }
+                $mIS = & $MsDeSlot $kIS
+                $hayInicio = $false
+                foreach ($kIL in @($EventosTiempo.Keys)) {
+                    if ($kIL -eq $kIS) { continue }
+                    $oIL = $EventosTiempo[$kIL]
+                    if ($null -eq $oIL -or $oIL -isnot [hashtable]) { continue }
+                    if ($oIL.Sesion -ne $sesIS) { continue }
+                    if ($oIL.Interpretacion -notmatch "INICIO DE LLAMADA") { continue }
+                    $mIL = & $MsDeSlot $kIL
+                    if ($mIS -ge 0 -and $mIL -ge 0 -and [math]::Abs($mIL - $mIS) -le 30000) { $hayInicio = $true; break }
+                }
+                if ($hayInicio) {
+                    $oIS.Interpretacion = ""; $oIS.ColorInterpretacion = [System.Drawing.Color]::White
+                    if ($oIS.Agente -eq "" -and $oIS.Aux -eq "" -and $oIS.Audio -eq "" -and $oIS.Ispeac -eq "" -and $oIS.SysLog -eq "" -and $oIS.AppLog -eq "") {
+                        $EventosTiempo.Remove($kIS) | Out-Null
                     }
                 }
             }
@@ -2610,7 +3894,21 @@ $btnAnalizar.Add_Click({
                 $GruposInicio[$clave] += $kI
             }
             foreach ($claveG in @($GruposInicio.Keys)) {
-                $slotsG = $GruposInicio[$claveG]
+                $slotsAllG = @($GruposInicio[$claveG] | Sort-Object { & $MsDeSlot $_ })
+                if ($slotsAllG.Count -lt 2) { continue }
+                # Los IDs de sesión se RECICLAN en cada login: dos INICIO con el MISMO número de sesión
+                # separados por minutos/horas son llamadas DISTINTAS, no duplicados. Los detectores que sí
+                # duplican una MISMA llamada (XML slot-base, PRIMARY_CONNECTED, PASO 5) disparan con
+                # milisegundos/segundos de diferencia → se parte en racimos y se deduplica DENTRO de cada uno.
+                $racimosG = @(); $actualG = @(); $prevMsG = -999999
+                foreach ($sG in $slotsAllG) {
+                    $mG = & $MsDeSlot $sG
+                    if ($mG -lt 0) { continue }
+                    if ($actualG.Count -gt 0 -and ($mG - $prevMsG) -gt 30000) { $racimosG += ,$actualG; $actualG = @() }
+                    $actualG += $sG; $prevMsG = $mG
+                }
+                if ($actualG.Count -gt 0) { $racimosG += ,$actualG }
+                foreach ($slotsG in $racimosG) {
                 if ($slotsG.Count -lt 2) { continue }
                 # Grupos por-segundo (sesión desconocida): exigir teléfono compatible para no fusionar dos llamadas distintas.
                 if ($claveG -like "T:*") {
@@ -2636,6 +3934,208 @@ $btnAnalizar.Add_Click({
                     } else {
                         $perdG.Interpretacion = ""; $perdG.ColorInterpretacion = [System.Drawing.Color]::White
                     }
+                }
+                }
+            }
+
+            # --- SEPARAR "MARCANDO/TIMBRANDO" DE "CONTESTARON" (salientes que sí conectaron) ---
+            # Corre DESPUÉS del dedup de INICIO saliente (así hay una sola fila de inicio por sesión).
+            # $ContestoSaliente trae el instante en que la VoiceInteraction recibió la dirección del otro
+            # lado (= "me contestaron"), coincidente al ms con Alerting→Active. Para cada saliente que
+            # conectó: la fila de INICIO se reetiqueta como fase de marcado/timbrado y se inserta una fila
+            # nueva "Contestaron — timbró Ns" en el instante de la respuesta; el FIN muestra "(habló Ns)".
+            # Corroboración por EVENTO (no por umbral de tiempo): solo se separa si el log muestra la
+            # transición Alerting→Active en el mismo instante de la respuesta. La ventana de ±1 s NO es un
+            # umbral de comportamiento — es tolerancia de jitter para reconocer que dos líneas del MISMO
+            # proceso (RemoteAddress y el screenpop) son el mismo instante (en la práctica coinciden al ms).
+            $AAms = @($AlertingActivaSlots | ForEach-Object { & $MsDeSlot $_ } | Where-Object { $_ -ge 0 })
+            $ContestadasSes = @{}
+            foreach ($ct in $ContestoSaliente) {
+                $sesCT = if ($ct.Cxt -and $Script:CxtToConnId.ContainsKey($ct.Cxt)) { $Script:CxtToConnId[$ct.Cxt] } else { "" }
+                if (-not $sesCT -or $sesCT -eq "-") { continue }
+                # NOTA: no filtrar por $LineaVaciaSinMarcar ni deduplicar por número de sesión aquí: Avaya
+                # RECICLA los IDs de sesión en cada login (mismo día → "Id=2" en la mañana y en la tarde son
+                # llamadas distintas). El apareo correcto se hace más abajo por FILA (slot), no por número.
+                $msAns = & $MsDeSlot $ct.Slot
+                if ($msAns -lt 0) { continue }
+                # ¿El log confirma Alerting→Active en ese instante? Si no, no fue una respuesta real (p.ej.
+                # la dirección se pobló al marcar en algún entorno) → no se separa.
+                $AA_OK = $false
+                foreach ($aa in $AAms) { if ([math]::Abs($aa - $msAns) -le 1000) { $AA_OK = $true; break } }
+                if (-not $AA_OK) { continue }
+                # Fila de INICIO saliente de esa sesión: la más cercana ANTERIOR a la respuesta.
+                $slotIniC = $null; $msIniC = -1
+                foreach ($kC in @($EventosTiempo.Keys)) {
+                    $oC = $EventosTiempo[$kC]
+                    if ($oC.Sesion -ne $sesCT) { continue }
+                    if ($oC.Interpretacion -notmatch "INICIO DE LLAMADA \(Saliente\)|Marcando/Timbrando") { continue }
+                    $mC = & $MsDeSlot $kC
+                    if ($mC -lt 0 -or $mC -gt $msAns) { continue }
+                    if ($mC -gt $msIniC) { $msIniC = $mC; $slotIniC = $kC }
+                }
+                if (-not $slotIniC) { continue }
+                # Dedup por la FILA de inicio concreta (no por número de sesión): con IDs reciclados, la sesión
+                # de la mañana y la de la tarde son filas distintas → cada una recibe su separación.
+                if ($ContestadasSes.ContainsKey($slotIniC)) { continue }
+                $ContestadasSes[$slotIniC] = $msAns
+                # DESGLOSE marcó/timbró SACADO DEL LOG (no una sola resta): los dígitos DTMF de esta sesión
+                # ($DtmfPresses, con nCallIndex) marcan el tecleo. "marcó" = del primer al último dígito
+                # (tecleo del número); "timbró" = del ÚLTIMO dígito hasta que contestaron (timbre real). Si no
+                # hubo dígitos (número guardado/rediscado), no hay fase de marcado y "timbró" = desde abrir línea.
+                $dialDt = @($DtmfPresses | Where-Object { $_.Ses -eq $sesCT } | ForEach-Object { & $MsDeSlot $_.Hora } | Where-Object { $_ -ge $msIniC -and $_ -le $msAns } | Sort-Object)
+                if ($dialDt.Count -ge 1) {
+                    $firstDt = $dialDt[0]; $lastDt = $dialDt[-1]
+                    $durMarco  = [int](($lastDt - $firstDt) / 1000)
+                    $durTimbre = [int](($msAns - $lastDt) / 1000)
+                } else {
+                    $durMarco  = -1
+                    $durTimbre = [int](($msAns - $msIniC) / 1000)
+                }
+                # Número a mostrar (el de la fila de inicio, o el mapeo, o el capturado).
+                $numMostrar = if ($EventosTiempo[$slotIniC].Tel -ne "-" -and $EventosTiempo[$slotIniC].Tel -ne "") { $EventosTiempo[$slotIniC].Tel } elseif ($MapeoTel[$sesCT]) { $MapeoTel[$sesCT] } else { $ct.Num }
+                $alNum = if ($numMostrar -and $numMostrar -ne "-") { " al $numMostrar" } else { "" }
+                # 1) Reetiquetar el INICIO → fase de marcado/timbrado (+ "marcó en Xs" si hubo tecleo).
+                $sufMarco = if ($durMarco -ge 1) { "  ⌨ marcó en ${durMarco}s" } else { "" }
+                $EventosTiempo[$slotIniC].Interpretacion      = "$symUp Marcando/Timbrando (saliente)$alNum$sufMarco"
+                $EventosTiempo[$slotIniC].ColorInterpretacion = [System.Drawing.Color]::MediumSeaGreen
+                $EventosTiempo[$slotIniC].RawInterpretacion  += "[MARCANDO/TIMBRANDO] Sesión $($sesCT): marcó ${durMarco}s (del 1er al último dígito DTMF), timbró ${durTimbre}s (último dígito → contestó a las $($ct.Slot)). durMarco=-1 = número guardado sin tecleo.`n"
+                # 2) Insertar fila nueva "Contestaron" en el instante de la respuesta (busca ms libre si choca).
+                $slotAns = $ct.Slot
+                if ($EventosTiempo.ContainsKey($slotAns) -and $EventosTiempo[$slotAns].Interpretacion -ne "") {
+                    $segA = ($slotAns -split ',')[0]; $msA = [int]($slotAns -split ',')[1]
+                    for ($j=1; $j -le 8; $j++) { $cand = "$segA,$((($msA+$j)).ToString('000'))"; if (-not ($EventosTiempo.ContainsKey($cand) -and $EventosTiempo[$cand].Interpretacion -ne "")) { $slotAns = $cand; break } }
+                }
+                Init-Hora $slotAns
+                $EventosTiempo[$slotAns].Interpretacion      = "$symPhone Contestaron — timbró ${durTimbre}s"
+                $EventosTiempo[$slotAns].ColorInterpretacion = [System.Drawing.Color]::LimeGreen
+                if ($EventosTiempo[$slotAns].Sesion -eq "-") { $EventosTiempo[$slotAns].Sesion = $sesCT }
+                if ($EventosTiempo[$slotAns].Tel -eq "-" -and $numMostrar -ne "-") { $EventosTiempo[$slotAns].Tel = $numMostrar }
+                $EventosTiempo[$slotAns].RawInterpretacion  += "[CONTESTARON] Sesión $($sesCT): el otro lado contestó (VoiceInteraction.RemoteAddress=$($ct.Num), coincide con Alerting→Active). Timbró ${durTimbre}s (desde el último dígito marcado).`n"
+                # 3) Duración de conversación en el FIN de esa sesión.
+                $slotFinC = $null; $msFinC = [double]::PositiveInfinity
+                foreach ($kF in @($EventosTiempo.Keys)) {
+                    $oF = $EventosTiempo[$kF]
+                    if ($oF.Sesion -ne $sesCT) { continue }
+                    if ($oF.Interpretacion -notmatch "FIN DE LLAMADA|CUELGUE MANUAL|CLIENTE COLGÓ|Cerró línea sin marcar") { continue }
+                    $mF = & $MsDeSlot $kF
+                    if ($mF -lt $msAns) { continue }
+                    if ($mF -lt $msFinC) { $msFinC = $mF; $slotFinC = $kF }
+                }
+                # CONTRADICCIÓN: si el log confirmó que CONTESTARON, la línea sí se marcó. Un "Cerró línea sin
+                # marcar" sobre esa misma llamada es imposible → se restaura a un FIN normal.
+                if ($slotFinC -and $EventosTiempo[$slotFinC].Interpretacion -match "Cerró línea sin marcar") {
+                    $EventosTiempo[$slotFinC].Interpretacion      = "$symStop FIN DE LLAMADA"
+                    $EventosTiempo[$slotFinC].ColorInterpretacion = [System.Drawing.Color]::IndianRed
+                    $EventosTiempo[$slotFinC].RawInterpretacion  += "[CORRECCIÓN] Se descartó 'Cerró línea sin marcar': esta llamada fue CONTESTADA (RemoteAddress + Alerting→Active), luego sí se marcó.`n"
+                }
+                if ($slotFinC -and $EventosTiempo[$slotFinC].Interpretacion -notmatch "habló") {
+                    $durTalk = [int](($msFinC - $msAns) / 1000)
+                    if ($durTalk -ge 0 -and $durTalk -le 7200) {
+                        $EventosTiempo[$slotFinC].Interpretacion += " (habló $(& $FmtMmSs $durTalk))"
+                    }
+                }
+            }
+
+            # --- MISMO "(habló mm:ss)" PERO PARA ENTRANTES ---
+            # "INICIO DE LLAMADA (Entrante)" ya se coloca en el instante de la CONEXIÓN real (Active), no en
+            # el instante en que empezó a timbrar (el tiempo de timbre queda aparte en "[Ring: Ns]" dentro de
+            # la misma fila) — así que, a diferencia de saliente, aquí no hace falta separar una fase de
+            # "marcando/timbrando": la duración de la conversación es directamente FIN - INICIO(Entrante) de
+            # la misma sesión. Pablo, 18/08/2026.
+            foreach ($kIE in @($EventosTiempo.Keys)) {
+                $oIE = $EventosTiempo[$kIE]
+                if ($oIE.Interpretacion -notmatch "INICIO DE LLAMADA \(Entrante\)") { continue }
+                $sesIE = $oIE.Sesion
+                if (-not $sesIE -or $sesIE -eq "-") { continue }
+                $msIniE = & $MsDeSlot $kIE
+                if ($msIniE -lt 0) { continue }
+                $slotFinE = $null; $msFinE = [double]::PositiveInfinity
+                foreach ($kFE in @($EventosTiempo.Keys)) {
+                    $oFE = $EventosTiempo[$kFE]
+                    if ($oFE.Sesion -ne $sesIE) { continue }
+                    if ($oFE.Interpretacion -notmatch "FIN DE LLAMADA|CUELGUE MANUAL|CLIENTE COLGÓ|Cerró línea sin marcar") { continue }
+                    $mFE = & $MsDeSlot $kFE
+                    if ($mFE -lt $msIniE) { continue }
+                    if ($mFE -lt $msFinE) { $msFinE = $mFE; $slotFinE = $kFE }
+                }
+                if ($slotFinE -and $EventosTiempo[$slotFinE].Interpretacion -notmatch "habló") {
+                    $durTalkE = [int](($msFinE - $msIniE) / 1000)
+                    if ($durTalkE -ge 0 -and $durTalkE -le 7200) {
+                        $EventosTiempo[$slotFinE].Interpretacion += " (habló $(& $FmtMmSs $durTalkE))"
+                    }
+                }
+            }
+
+            # --- RESPALDO "(habló mm:ss)" PARA SALIENTES INTERNAS (extensión a extensión) ---
+            # Estas nunca pasan por el bloque de arriba (foreach $ContestoSaliente) porque no generan ni el
+            # RemoteAddress= ni la corroboración Alerting→Active: conectan directo (New→Active) sin timbrar.
+            # Aquí se usa $ConexionActivaSaliente (capturado en PASO 4) como el instante real de conexión —
+            # solo aplica a filas que quedaron como "INICIO DE LLAMADA (Saliente)" SIN convertir a
+            # "Marcando/Timbrando" (esas ya se resolvieron arriba con su propio instante de "contestó").
+            # Caso real: extensión 45011/45407, 18/08/2026 (Pablo).
+            foreach ($kIS in @($EventosTiempo.Keys)) {
+                $oIS = $EventosTiempo[$kIS]
+                if ($oIS.Interpretacion -notmatch "INICIO DE LLAMADA \(Saliente\)") { continue }
+                $sesIS = $oIS.Sesion
+                if (-not $sesIS -or $sesIS -eq "-") { continue }
+                if (-not $ConexionActivaSaliente.ContainsKey($sesIS)) { continue }
+                $msConectoIS = & $MsDeSlot $ConexionActivaSaliente[$sesIS]
+                if ($msConectoIS -lt 0) { continue }
+                $slotFinS = $null; $msFinS = [double]::PositiveInfinity
+                foreach ($kFS in @($EventosTiempo.Keys)) {
+                    $oFS = $EventosTiempo[$kFS]
+                    if ($oFS.Sesion -ne $sesIS) { continue }
+                    if ($oFS.Interpretacion -notmatch "FIN DE LLAMADA|CUELGUE MANUAL|CLIENTE COLGÓ|Cerró línea sin marcar") { continue }
+                    $mFS = & $MsDeSlot $kFS
+                    if ($mFS -lt $msConectoIS) { continue }
+                    if ($mFS -lt $msFinS) { $msFinS = $mFS; $slotFinS = $kFS }
+                }
+                if ($slotFinS -and $EventosTiempo[$slotFinS].Interpretacion -notmatch "habló") {
+                    $durTalkS = [int](($msFinS - $msConectoIS) / 1000)
+                    if ($durTalkS -ge 0 -and $durTalkS -le 7200) {
+                        $EventosTiempo[$slotFinS].Interpretacion += " (habló $(& $FmtMmSs $durTalkS))"
+                    }
+                }
+            }
+
+            # --- PLEGAR AUDIO ABIERTO/CERRADO EN LA FILA QUE LO PROVOCÓ (mismo segundo) ---
+            # "Audio abierto/cerrado" cae en el MISMO segundo que el evento que lo causó (abrir línea / fin
+            # de llamada). En vez de una fila propia que solo puebla la columna Audio, se mete en la fila de
+            # ese evento. La renegociación de medios NO se pliega (es un evento propio significativo).
+            $AbreReAu   = "INICIO DE LLAMADA|Marcando/Timbrando|Contestaron|INICIO DE SESIÓN|LÍNEA ABIERTA|Abrió .*sin marcar|señal de llamada"
+            $CierraReAu = "FIN DE LLAMADA|CUELGUE MANUAL|Cerró línea|CLIENTE COLGÓ|EVASIÓN"
+            foreach ($kAudF in @($EventosTiempo.Keys)) {
+                if (-not $EventosTiempo.ContainsKey($kAudF)) { continue }
+                $oAudF = $EventosTiempo[$kAudF]
+                if ($null -eq $oAudF -or $oAudF -isnot [hashtable]) { continue }
+                if ($oAudF.Audio -notmatch "Audio abierto|Audio cerrado") { continue }
+                if ($oAudF.Audio -match "renegoci") { continue }
+                # Si esta misma fila ya trae una interpretación, no es una fila de solo-audio → no tocar.
+                if ($oAudF.Interpretacion -ne "") { continue }
+                $esAbreAu = ($oAudF.Audio -match "Audio abierto")
+                $baseSecF = ($kAudF -split ',')[0]
+                $msAudF = & $MsDeSlot $kAudF
+                # Buscar la fila destino en el MISMO segundo: el evento que lo provocó (abrir / fin).
+                $tgtSlotF = $null; $tgtDistF = 1e18
+                foreach ($kT in @($EventosTiempo.Keys)) {
+                    if ($kT -eq $kAudF) { continue }
+                    if (($kT -split ',')[0] -ne $baseSecF) { continue }
+                    $oT = $EventosTiempo[$kT]
+                    if ($null -eq $oT -or $oT -isnot [hashtable] -or $oT.Interpretacion -eq "" -or $oT.Audio -ne "") { continue }
+                    $reOKau = if ($esAbreAu) { $oT.Interpretacion -match $AbreReAu } else { $oT.Interpretacion -match $CierraReAu }
+                    if (-not $reOKau) { continue }
+                    $mT = & $MsDeSlot $kT
+                    $distF = [math]::Abs($msAudF - $mT)
+                    if ($distF -lt $tgtDistF) { $tgtDistF = $distF; $tgtSlotF = $kT }
+                }
+                if (-not $tgtSlotF) { continue }
+                # Mover el audio a la fila destino y eliminar el slot de solo-audio.
+                $EventosTiempo[$tgtSlotF].Audio      = $oAudF.Audio
+                $EventosTiempo[$tgtSlotF].ColorAudio = $oAudF.ColorAudio
+                $EventosTiempo[$tgtSlotF].RawAudio  += $oAudF.RawAudio
+                $oAudF.Audio = ""; $oAudF.ColorAudio = [System.Drawing.Color]::White
+                if ($oAudF.Agente -eq "" -and $oAudF.Aux -eq "" -and $oAudF.Ispeac -eq "" -and $oAudF.SysLog -eq "" -and $oAudF.AppLog -eq "" -and $oAudF.Dtmf -eq "") {
+                    $EventosTiempo.Remove($kAudF) | Out-Null
                 }
             }
 
@@ -2682,10 +4182,24 @@ $btnAnalizar.Add_Click({
             $lblStatus.Text = "PASO 6/6: Renderizando Cerebro Forense..."; $Form.Refresh()
             $HorasOrdenadas = $EventosTiempo.Keys | Sort-Object
             $CurrentAux = "$symUser Estado: USUARIO DESFIRMADO"; $CurrentColor = [System.Drawing.Color]::Gray; $CurrentReasonCode = ""
+            # $UltimoMotivoElegido: memoria "pegajosa" del último reason code EXPLÍCITO que el asesor eligió.
+            # A diferencia de $CurrentReasonCode (que se limpia cada vez que el asesor pasa por Disponible),
+            # esta NO se limpia con Disponible — solo cuando se elige un motivo distinto. Replica el
+            # comportamiento real de Avaya/CM: si el asesor usa TrabAux (botón favorito) sin elegir motivo,
+            # el CM mantiene el ÚLTIMO auxiliar usado (confirmado por Pablo: la GUI de OneX mostraba "Aux
+            # Sistemas" en ese caso, aunque hubiera pasado por Disponible antes). Pablo, prueba 28/08/2026.
+            $UltimoMotivoElegido = ""
             $RecienFirmado = $false; $ValidandoLogin = $false; $LoginFallido = $false
+            $LoginYaConfirmado = $false   # login confirmado en este ciclo; se reabre solo con un desfirme real (evita doble "firmado exitosamente" por eventos intermedios)
+            # DEFAULT AUTOMÁTICO POST-LOGIN: Avaya dispara "Enter Aux;code=ReasonCode[0]" DOS veces al firmarse
+            # (no es un clic del asesor). El flag $RecienFirmado no sirve como ancla: cualquier fila con contenido
+            # (Entry.ConnectinoID, Línea cerrada…) lo resetea. Tampoco sirve una ventana de tiempo: el asesor
+            # puede tardar lo que quiera en ponerse Disponible. Se usa el ESTADO: el 1er DEFAULT tras el logon
+            # es el automático; mientras el asesor siga en ese DEFAULT, cualquier repetición es re-emisión de Avaya.
+            $EsperandoDefaultPostLogin = $false  # hubo logon, aún no llega el DEFAULT automático
+            $EnDefaultPostLogin        = $false  # el asesor sigue en el DEFAULT post-logon → DEFAULTs repetidos = duplicados
             $LlamadaActiva = $false; $SesionActual = "-"
-
-            $DictRC = @{ "0"="DEFAULT"; "1"="COMIDA"; "2"="BAÑO"; "3"="LLAMADA SALIDA"; "4"="CAPACITACION"; "5"="SERVICIOS ESPECIALES"; "6"="COBRANZA"; "7"="SEGUIMIENTO"; "8"="RETRO"; "9"="SISTEMAS" }
+            # $DictRC ahora se declara arriba (antes de PASO 4/5) para que ambos lo compartan — ver Opción B.
 
             # ── POST-PROCESO: Colapsar dígitos intermedios de marcación manual ──────────────
             # La PBX da 10 segundos entre cada dígito. Al marcar p.ej. extensión 2222 el log
@@ -2721,13 +4235,52 @@ $btnAnalizar.Add_Click({
             }
             # ─────────────────────────────────────────────────────────────────────────────────
 
+            # ── CALIDAD DE RED en filas EXISTENTES (sin crear slots) ─────────────────────────
+            # En vez de una fila por lectura RTCP (que saturaba el timeline), se ADJUNTA el estado
+            # de red a cada evento REAL (Interpretacion != "") buscando la lectura más cercana en el
+            # tiempo (±$VentCalidad). El IspeacLog solo tiene lecturas durante la llamada, así que los
+            # eventos fuera de llamada quedan en blanco de forma natural. La columna entera se muestra/
+            # oculta con la casilla "Ver Calidad de Red" (no estorba apagada). Verde=sano, ámbar=degradado,
+            # rojo=crítico (pérdida ≥10% o RTT ≥100 ms). Solo se toca Interpretacion != "" para NO
+            # destapar filas ocultas (badges de estado se saltan si están vacíos + Ispeac == "").
+            if (($LossReadings.Count + $RttReadings.Count) -gt 0) {
+                $VentCalidad = 20000   # ventana ±20 s (las lecturas RTCP van ~cada 5 s durante la llamada)
+                $lossMs = @($LossReadings | ForEach-Object { [pscustomobject]@{ Ms = (& $MsDeSlot $_.Slot); Pct = $_.Pct; Raw = $_.Raw } } | Where-Object { $_.Ms -ge 0 })
+                $rttMs  = @($RttReadings  | ForEach-Object { [pscustomobject]@{ Ms = (& $MsDeSlot $_.Slot); Rtt = $_.Rtt; Raw = $_.Raw } } | Where-Object { $_.Ms -ge 0 })
+                foreach ($kQ in @($EventosTiempo.Keys)) {
+                    $oQ = $EventosTiempo[$kQ]
+                    if ($null -eq $oQ -or $oQ -isnot [hashtable]) { continue }
+                    if ($oQ.Interpretacion -eq "" -or $oQ.Ispeac -ne "") { continue }
+                    $mQ = & $MsDeSlot $kQ
+                    if ($mQ -lt 0) { continue }
+                    $nl = $null; $nlD = $VentCalidad + 1
+                    foreach ($lr in $lossMs) { $d = [math]::Abs($lr.Ms - $mQ); if ($d -le $VentCalidad -and $d -lt $nlD) { $nl = $lr; $nlD = $d } }
+                    $nr = $null; $nrD = $VentCalidad + 1
+                    foreach ($rr in $rttMs)  { $d = [math]::Abs($rr.Ms - $mQ); if ($d -le $VentCalidad -and $d -lt $nrD) { $nr = $rr; $nrD = $d } }
+                    if ($null -eq $nl -and $null -eq $nr) { continue }
+                    $sevQ = 0
+                    if ($nl) { if ($nl.Pct -ge 10) { $sevQ = 2 } elseif ($nl.Pct -gt 0 -and $sevQ -lt 1) { $sevQ = 1 } }
+                    if ($nr) { if ($nr.Rtt -ge 100) { $sevQ = 2 } elseif ($nr.Rtt -ge 50 -and $sevQ -lt 1) { $sevQ = 1 } }
+                    $detQ = @()
+                    if ($nr) { $detQ += "RTT $($nr.Rtt) ms" }
+                    if ($nl) { $detQ += "pérdida $($nl.Pct)%" }
+                    $detStrQ = $detQ -join ", "
+                    if     ($sevQ -eq 2) { $oQ.Ispeac = "¡ALERTA RED! ($detStrQ)";   $oQ.ColorIspeac = [System.Drawing.Color]::OrangeRed }
+                    elseif ($sevQ -eq 1) { $oQ.Ispeac = "⚠ Red degradada ($detStrQ)"; $oQ.ColorIspeac = [System.Drawing.Color]::Gold }
+                    else                 { $oQ.Ispeac = "♪ Red OK ($detStrQ)";        $oQ.ColorIspeac = [System.Drawing.Color]::MediumSpringGreen }
+                    if ($nr) { $oQ.RawIspeac += "$($nr.Raw)`n" }
+                    if ($nl) { $oQ.RawIspeac += "$($nl.Raw)`n" }
+                }
+            }
+            # ─────────────────────────────────────────────────────────────────────────────────
+
             $GridResultados.SuspendLayout()
             if ($HorasOrdenadas -ne $null -and $HorasOrdenadas.Count -gt 0) {
                 foreach ($H in $HorasOrdenadas) {
                     $Obj = $EventosTiempo[$H]
                     if ($null -eq $Obj -or $Obj -isnot [hashtable]) { continue }   # guard: slots siempre deben ser hashtable
                     if ($Obj.CollapsedByDialing -eq $true) { continue }              # guard: dígito intermedio de marcación — no mostrar
-                    if ($Obj.Agente -eq "" -and $Obj.Audio -eq "" -and $Obj.SysLog -eq "" -and $Obj.AppLog -eq "" -and $Obj.Aux -eq "" -and $Obj.Interpretacion -eq "" -and $Obj.Ispeac -eq "" -and $Obj.RawAux -notmatch "Session_LoginAgent failed") { continue }
+                    if ($Obj.Agente -eq "" -and $Obj.Audio -eq "" -and $Obj.SysLog -eq "" -and $Obj.AppLog -eq "" -and $Obj.Aux -eq "" -and $Obj.Interpretacion -eq "" -and $Obj.Ispeac -eq "" -and $Obj.Dtmf -eq "" -and $Obj.RawAux -notmatch "Session_LoginAgent failed") { continue }
                     # Suprimir slot base cuando la señal de llamada fue movida al slot ms por auto-in en el mismo segundo.
                     # El slot base queda con Aux/RawAux del estado del agente pero Interpretacion="" — no aporta fila visible.
                     # PERO actualizar PRIMERO el estado vigente: AUTOIN_DISP_SLOT = el agente activó auto-in → DISPONIBLE.
@@ -2741,7 +4294,11 @@ $btnAnalizar.Add_Click({
                     # duplicaba la fila que EnterReadyHandler ENDED ya creó en el slot ms del mismo segundo.
                     # Si existe la hermana con ms, se omite la base y solo se actualiza el estado vigente.
                     # Si NO existe (raro: el ms-slot estaba ocupado), la base se conserva como respaldo.
-                    if ($Obj.Interpretacion -eq "" -and $Obj.Aux -match "GUI_READY_CONFIRMADO" -and $H -notmatch ',' -and
+                    # Se incluye también AUTOIN_DISP_SLOT y el AgentStateChanged=Ready: el slot base del
+                    # segundo de auto-in recibía el estado Ready (y a veces Sesión/Teléfono de la llamada
+                    # entrante del mismo segundo) y se pintaba como una 2ª fila "Asesor se cambia a Disponible".
+                    if ($Obj.Interpretacion -eq "" -and $H -notmatch ',' -and
+                        ($Obj.Aux -match "GUI_READY_CONFIRMADO|AUTOIN_DISP_SLOT" -or $Obj.RawAux -match "(?i)AgentStateChanged.*newState=Ready") -and
                         $Obj.Agente -eq "" -and $Obj.Audio -eq "" -and $Obj.Ispeac -eq "" -and $Obj.SysLog -eq "" -and $Obj.AppLog -eq "") {
                         $HaySibDisp = $false
                         foreach ($kSib in $EventosTiempo.Keys) {
@@ -2749,6 +4306,55 @@ $btnAnalizar.Add_Click({
                         }
                         if ($HaySibDisp) {
                             $CurrentReasonCode = ""; $CurrentAux = "$symUser Estado: DISPONIBLE"; $CurrentColor = [System.Drawing.Color]::LimeGreen
+                            # BUG preexistente corregido (Pablo, 08/2026): el reset de $EsperandoDefaultPostLogin/
+                            # $EnDefaultPostLogin vivía SOLO dentro del cuerpo de las ramas "GUI_READY_CONFIRMADO"/
+                            # "newState=Ready" de la cadena de prioridad de abajo — pero esta fila base NUNCA
+                            # llega a esa cadena (el "continue" de aquí arriba la intercepta antes). Resultado:
+                            # en el flujo NORMAL (con este dedup, que es el caso de casi TODAS las firmas), esas
+                            # banderas se quedaban en "true" para siempre tras el primer Default post-login,
+                            # hasta hoy invisible porque nada las consultaba — pero ahora sí (ver rama de
+                            # Auxiliar-vía-favorito, Punto 1), así que hacía falta este fix para que no se
+                            # tragara eventos reales de Auxiliar más adelante en el día creyendo que aún era el
+                            # Default automático del login.
+                            $EsperandoDefaultPostLogin = $false; $EnDefaultPostLogin = $false
+                            continue
+                        }
+                    }
+                    # DEDUP "Auxiliar [motivo] (Confirmado por clic)" (Opción B): mismo patrón que "Disponible"
+                    # arriba. El slot base (segundo compartido, con los tokens RC/NUEVO_RC/GUI_AUX_CONFIRMADO)
+                    # duplicaba la fila que EnterAuxWithReasonCodeHandler ENDED ya creó en su slot ms (PASO 4).
+                    # Si existe la hermana con ms, se omite la base y solo se actualiza el estado vigente ahí
+                    # mismo (recalculando el código desde la base, por si la hermana no llegó a armarse).
+                    if ($Obj.Interpretacion -eq "" -and $H -notmatch ',' -and
+                        ($Obj.Aux -match "GUI_AUX_CONFIRMADO|NUEVO_RC:|RC: " -or $Obj.RawAux -match "(?i)AgentStateChanged.*newState=Aux") -and
+                        $Obj.Agente -eq "" -and $Obj.Audio -eq "" -and $Obj.Ispeac -eq "" -and $Obj.SysLog -eq "" -and $Obj.AppLog -eq "") {
+                        $HaySibAux = $false
+                        foreach ($kSib in $EventosTiempo.Keys) {
+                            if ($kSib -match ("^" + [regex]::Escape($H) + ",\d+$") -and $EventosTiempo[$kSib].Interpretacion -match "se cambia a Auxiliar|se cambia a Default|Auxiliar pendiente aplicado") { $HaySibAux = $true; break }
+                        }
+                        if ($HaySibAux) {
+                            $CodigoRCDed = ""
+                            if ($Obj.Aux -match "NUEVO_RC:(\d+)") { $CodigoRCDed = $matches[1] }
+                            elseif ($Obj.RawAux -match "(?i)ReasonCode[=\[>:\s]*(\d+)") { $CodigoRCDed = $matches[1] }
+                            # Finalización diferida de un PendingAux (Punto 2): esta fila base NO trae código propio
+                            # (el motivo se eligió varios segundos antes, en OTRO segundo) — se usa el que ya quedó
+                            # registrado en $UltimoMotivoElegido cuando se procesó aquel clic original.
+                            elseif ($UltimoMotivoElegido -ne "" -and $UltimoMotivoElegido -ne "0") { $CodigoRCDed = $UltimoMotivoElegido }
+                            if ($CodigoRCDed -ne "") {
+                                if ($CodigoRCDed -eq "0") {
+                                    # Motivo explícito = Default (elegido a propósito desde el menú, no el
+                                    # automático post-login) — se muestra como DEFAULT, no "AUXILIAR (DEFAULT)".
+                                    $CurrentReasonCode = "0"; $CurrentAux = "$symUser Estado: DEFAULT"; $CurrentColor = [System.Drawing.Color]::CadetBlue
+                                } else {
+                                    $NombreRCDed = if ($DictRC.ContainsKey($CodigoRCDed)) { $DictRC[$CodigoRCDed] } else { $CodigoRCDed }
+                                    $CurrentReasonCode = $CodigoRCDed; $CurrentAux = "$symUser Estado: AUXILIAR ($NombreRCDed)"; $CurrentColor = [System.Drawing.Color]::Orange
+                                    $UltimoMotivoElegido = $CodigoRCDed
+                                }
+                            }
+                            # Ver nota del bug preexistente arriba (dedup de Disponible): mismo fix aquí — un
+                            # motivo elegido A PROPÓSITO desde el menú (con o sin código) ya no es ambigüedad
+                            # de "recién firmado", así que se limpian las banderas del Default post-login.
+                            $EsperandoDefaultPostLogin = $false; $EnDefaultPostLogin = $false
                             continue
                         }
                     }
@@ -2771,6 +4377,44 @@ $btnAnalizar.Add_Click({
                     # Si además hay datos de AppLog o SysLog (errores) la fila sí se conserva.
                     if ($Obj.Interpretacion -eq "" -and $Obj.Agente -match "^UpdateHistoryRecord: SessionID=" -and $Obj.AppLog -eq "" -and $Obj.SysLog -eq "") { continue }
 
+                    # --- Suprimir el FAC del botón favorito AUTO-IN (NO es una llamada real) ---
+                    # El botón AUTO-IN dispara el FAC $FacAutoIn, que nace como saliente SIN destino
+                    # (RemoteParty=[,]) y por eso se cuela como "LÍNEA ABIERTA SIN MARCAR" — a veces
+                    # DUPLICADA: una fila por el OneXAgent.log (Tel=$FacAutoIn) y otra por el XML de
+                    # contactos (Tel=Desconocido). Ya lo identificamos por el número; aquí se eliminan
+                    # TODAS sus filas (los dos "sin marcar" + su FIN, con el audio ya plegado dentro),
+                    # dejando solo "Disponible usando botón favorito AUTO-IN". El guard exige Tel=$FacAutoIn
+                    # o etiqueta "sin marcar" → nunca toca la fila de Disponible (Tel="-", otra etiqueta).
+                    if ($AutoInFacSlots.Count -gt 0 -and ($Obj.Tel -eq $FacAutoIn -or $Obj.Interpretacion -match "LÍNEA ABIERTA SIN MARCAR")) {
+                        $msRowFac = & $MsDeSlot $H
+                        if ($msRowFac -ge 0) {
+                            $esFilaFac = $false
+                            foreach ($sFac in $AutoInFacSlots) {
+                                $mdFac = & $MsDeSlot $sFac
+                                if ($mdFac -ge 0 -and [math]::Abs($msRowFac - $mdFac) -le 3000) { $esFilaFac = $true; break }
+                            }
+                            if ($esFilaFac) { $LlamadaActiva = $false; $SesionActual = "-"; continue }
+                        }
+                    }
+
+                    # --- Suprimir la pata phantom del handshake de login (NO es una línea abandonada) ---
+                    # Durante el método Login() (registro de estación) Avaya crea una pata saliente vacía
+                    # que nace y muere en ~1s, ANTES de que el agente esté firmado → se cuela como "LÍNEA
+                    # ABIERTA SIN MARCAR" y como "¡EVASIÓN!". No es un abandono real. Se eliminan ambas filas
+                    # si su slot cae dentro de la ventana [Begin..End] del Login() (± margen). El agente ya
+                    # queda representado por "Usuario intentando firmarse" / "Fallo en el intento de firmarse".
+                    if ($LoginWins.Count -gt 0 -and $Obj.Interpretacion -match "LÍNEA ABIERTA SIN MARCAR|EVASIÓN") {
+                        $msRowLg = & $MsDeSlot $H
+                        if ($msRowLg -ge 0) {
+                            $esFilaLogin = $false
+                            foreach ($lw in $LoginWins) {
+                                $bMs = & $MsDeSlot $lw.B; $eMs = & $MsDeSlot $lw.E
+                                if ($bMs -ge 0 -and $eMs -ge 0 -and $msRowLg -ge ($bMs - 500) -and $msRowLg -le ($eMs + 500)) { $esFilaLogin = $true; break }
+                            }
+                            if ($esFilaLogin) { $LlamadaActiva = $false; $SesionActual = "-"; continue }
+                        }
+                    }
+
                     if ($Obj.Interpretacion -match "INICIO DE LLAMADA|LÍNEA ABIERTA") { $LlamadaActiva = $true; $SesionActual = $Obj.Sesion }
                     elseif ($Obj.Interpretacion -match "FIN DE LLAMADA|CUELGUE MANUAL|EVASIÓN") { $LlamadaActiva = $false; $SesionActual = "-" }
 
@@ -2778,8 +4422,9 @@ $btnAnalizar.Add_Click({
 
                     # Activar ValidandoLogin desde XML (LoggedIn) o desde Amnesia V21
                     # Guard $RecienFirmado: evita re-trigger si Avaya emite LOGGEDIN desde 2 fuentes (XML + OneXAgent)
-                    if ($Obj.Aux -match "ESTADO: LOGGEDIN" -and -not $RecienFirmado) { $ValidandoLogin = $true }
-                    if ($Interp -match "Usuario intentando firmarse") { $ValidandoLogin = $true; $RecienFirmado = $false }
+                    if ($Obj.Aux -match "ESTADO: LOGGEDIN" -and -not $RecienFirmado -and -not $LoginYaConfirmado) { $ValidandoLogin = $true }
+                    # "Intentando firmarse" = inicio de un login NUEVO → reabre la validación (resetea el flag de confirmado).
+                    if ($Interp -match "Usuario intentando firmarse") { $ValidandoLogin = $true; $RecienFirmado = $false; $LoginYaConfirmado = $false; $EsperandoDefaultPostLogin = $false; $EnDefaultPostLogin = $false; $UltimoMotivoElegido = "" }
 
                     # Prioridad de interpretación (de mayor a menor)
                     if ($Obj.SysLog -match "User moved") {
@@ -2788,7 +4433,7 @@ $btnAnalizar.Add_Click({
                     elseif ($Obj.SysLog -match "PANTALLAZO AZUL|Apagado Sucio|Corte energía|Memoria Virtual Agotada|Tarjeta de Red desconectada" -or $Obj.AppLog -match "Caída de Túnel Principal") {
                         $Interp = "FALLA TÉCNICA (Justificado / Caída de Sistema o Red)"; $ColorInterp = [System.Drawing.Color]::LimeGreen
                     }
-                    elseif ($Obj.AppLog -match "Cierre Forzado") { $Interp = "Cierre forzado de AvayaOne-X Agent"; $ColorInterp = [System.Drawing.Color]::Red }
+                    elseif ($Obj.AppLog -match "hilo interno abortado") { $Interp = "Aviso: Avaya reinició un hilo interno (la app NO se cerró)"; $ColorInterp = [System.Drawing.Color]::Orange }
                     elseif ($Obj.AppLog -match "System.Exception") { $Interp = "Falla grave en llamada"; $ColorInterp = [System.Drawing.Color]::Red }
                     elseif ($Obj.Audio -match "Dispositivo de Audio Desconectado") { $Interp = "¡ALERTA CRÍTICA! Diadema desconectada físicamente"; $ColorInterp = [System.Drawing.Color]::Red }
                     elseif ($Obj.Agente -match "CUELGUE MANUAL|LLAMADA COLGADA POR EL ASESOR") {
@@ -2812,20 +4457,29 @@ $btnAnalizar.Add_Click({
                     elseif ($Obj.Agente -match "x MUTE MANUAL") { $Interp = "Mute activado"; $ColorInterp = [System.Drawing.Color]::Yellow }
                     elseif ($Obj.Agente -match "o UNMUTE MANUAL") { $Interp = "Mute desactivado"; $ColorInterp = [System.Drawing.Color]::Yellow }
                     elseif ($Obj.AppLog -match "APP CRASH") { $Interp = "Aplicación congelada o cerrada inesperadamente"; $ColorInterp = [System.Drawing.Color]::Orange }
-                    elseif ($Obj.Aux -match "SISTEMA_LOGOUT") { if ($Interp -notmatch "FIN DE LLAMADA|CUELGUE MANUAL|EVASIÓN") { $Interp = "Asesor se desfirma"; $ColorInterp = [System.Drawing.Color]::LightSkyBlue }; $RecienFirmado = $false }
+                    elseif ($Obj.Aux -match "SISTEMA_LOGOUT") { if ($Interp -notmatch "FIN DE LLAMADA|CUELGUE MANUAL|EVASIÓN") { $Interp = "Asesor se desfirma"; $ColorInterp = [System.Drawing.Color]::LightSkyBlue }; $RecienFirmado = $false; $LoginYaConfirmado = $false; $EsperandoDefaultPostLogin = $false; $EnDefaultPostLogin = $false; $UltimoMotivoElegido = "" }
                     elseif ($Interp -match "INICIO DE LLAMADA" -and $Obj.Tel -match "^565$") { $Interp = "Asesor solicita desfirmarse"; $ColorInterp = [System.Drawing.Color]::IndianRed }
                     elseif ($Interp -match "FIN DE LLAMADA NORMAL" -and $Obj.Tel -match "^565$") { $Interp = "Asesor desfirmado"; $ColorInterp = [System.Drawing.Color]::SkyBlue }
-                    elseif ($Obj.RawAux -match "Session_LoginAgent failed") { $Interp = "Fallo en el intento de firmarse"; $ColorInterp = [System.Drawing.Color]::LightCoral; $LoginFallido = $true; $ValidandoLogin = $false }
+                    elseif ($Obj.RawAux -match "Session_LoginAgent failed") {
+                        $Interp = "Fallo en el intento de firmarse"; $ColorInterp = [System.Drawing.Color]::LightCoral; $LoginFallido = $true; $ValidandoLogin = $false
+                        # Evidencia al clic en la celda Interpretación: la determinación viene de RawAux
+                        # ("Session_LoginAgent failed"), pero el tooltip de Interpretación lee RawInterpretacion.
+                        # Se copia la línea cruda del fallo para que el clic muestre el porqué.
+                        $_lfFallo = @($Obj.RawAux -split "`n" | Where-Object { $_ -match "Session_LoginAgent failed" })
+                        if ($_lfFallo.Count -gt 0 -and $Obj.RawInterpretacion -notmatch "Session_LoginAgent failed") { $Obj.RawInterpretacion += (($_lfFallo -join "`n") + "`n") }
+                    }
 
                     # Lógica de login dinámico
                     elseif ($ValidandoLogin -eq $true) {
                         if ($Obj.RawAux -match "(?i)Enter\s+Aux" -or $Obj.Aux -match "ESTADO: AUX|ESTADO: PENDINGAUX|NUEVO_RC") {
-                            $Interp = "Usuario firmado exitosamente"; $ColorInterp = [System.Drawing.Color]::LimeGreen; $ValidandoLogin = $false; $RecienFirmado = $true
+                            $Interp = "Usuario firmado exitosamente"; $ColorInterp = [System.Drawing.Color]::LimeGreen; $ValidandoLogin = $false; $RecienFirmado = $true; $LoginYaConfirmado = $true
+                            $EsperandoDefaultPostLogin = $true; $EnDefaultPostLogin = $false   # el DEFAULT automático de Avaya llega enseguida
                             $CodigoRC = ""; if ($Obj.RawAux -match "(?i)ReasonCode[=\[>:\s]*(\d+)") { $CodigoRC = $matches[1] }
                             # Intentar también desde XML
                             if ($CodigoRC -eq "" -and $Obj.Aux -match "NUEVO_RC_NOMBRE:([^|]+)") { $CodigoRC = $matches[1].Trim() }
                             $NombreRC = if ($CodigoRC -ne "" -and $DictRC.ContainsKey($CodigoRC)) { $DictRC[$CodigoRC] } elseif ($CodigoRC -ne "" -and $CodigoRC -ne "default" -and $CodigoRC -ne "Default") { $CodigoRC } else { "DEFAULT" }
                             $CurrentReasonCode = $CodigoRC
+                            if ($CodigoRC -ne "" -and $CodigoRC -ne "0" -and $CodigoRC -notmatch "(?i)^default$") { $UltimoMotivoElegido = $CodigoRC }
                             if ($CodigoRC -eq "0" -or $CodigoRC -eq "" -or $CodigoRC -match "(?i)^default$") {
                                 $CurrentAux = "$symUser Estado: DEFAULT"; $CurrentColor = [System.Drawing.Color]::CadetBlue
                             } else {
@@ -2834,7 +4488,8 @@ $btnAnalizar.Add_Click({
                             $Obj.Aux = $CurrentAux; $Obj.ColorAux = $CurrentColor
                         }
                         elseif ($Obj.RawAux -match "(?i)AgentStateChanged.*newState=Ready" -or $Obj.Aux -match "ESTADO: READY|ESTADO: AUTOIN|ESTADO: MANUALIN") {
-                            $Interp = "Usuario firmado exitosamente"; $ColorInterp = [System.Drawing.Color]::LimeGreen; $ValidandoLogin = $false; $RecienFirmado = $true
+                            $Interp = "Usuario firmado exitosamente"; $ColorInterp = [System.Drawing.Color]::LimeGreen; $ValidandoLogin = $false; $RecienFirmado = $true; $LoginYaConfirmado = $true
+                            $EsperandoDefaultPostLogin = $true; $EnDefaultPostLogin = $false   # el DEFAULT automático de Avaya llega enseguida
                         }
                     }
 
@@ -2843,9 +4498,63 @@ $btnAnalizar.Add_Click({
                     # cuando coinciden en el mismo segundo (frecuente en XML donde Ready y llamada son simultáneos)
                     elseif ($Obj.Aux -match "GUI_READY_CONFIRMADO" -and $Interp -notmatch "señal de llamada|INICIO DE LLAMADA|LÍNEA ABIERTA|FIN DE LLAMADA|CUELGUE MANUAL|EVASIÓN") {
                         $Interp = "Asesor se cambia a Disponible (Confirmado por clic)"; $ColorInterp = [System.Drawing.Color]::Yellow
+                        $EsperandoDefaultPostLogin = $false; $EnDefaultPostLogin = $false   # salió del DEFAULT post-logon
                     }
                     elseif ($Obj.RawAux -match "(?i)AgentStateChanged.*newState=Ready" -and $Interp -notmatch "señal de llamada|INICIO DE LLAMADA|LÍNEA ABIERTA|FIN DE LLAMADA|CUELGUE MANUAL|EVASIÓN") {
                         $Interp = "Asesor se cambia a Disponible"; $ColorInterp = [System.Drawing.Color]::Yellow
+                        # ¿Fue con el botón favorito AUTO-IN? Ese botón dispara el FAC $FacAutoIn como saliente
+                        # cortita coincidente (~mismo segundo) con el Ready; el botón normal usa CTI y no la genera.
+                        $msDisp = & $MsDeSlot $H
+                        if ($msDisp -ge 0) {
+                            foreach ($sFac in $AutoInFacSlots) {
+                                if ([math]::Abs((& $MsDeSlot $sFac) - $msDisp) -le 3000) { $Interp = "Asesor se cambia a Disponible usando botón favorito AUTO-IN"; break }
+                            }
+                        }
+                        $EsperandoDefaultPostLogin = $false; $EnDefaultPostLogin = $false   # salió del DEFAULT post-logon
+                    }
+                    # AUX puesto con BOTÓN FAVORITO ("Trab Aux"): genera "AgentStateChanged newState=Aux" pero NO
+                    # "Enter Aux" ni la petición del endpoint. Debe ir ANTES de la rama "ESTADO: READY": el mismo
+                    # slot trae "oldState=Ready" que se capturó como "ESTADO: READY" y enmascaraba el auxiliar,
+                    # dejándolo invisible. Aquí se prioriza el newState=Aux real. (Pablo, prueba controlada 28/07.)
+                    elseif ($Obj.RawAux -match "(?i)AgentStateChanged.*newState=Aux" -and $Obj.RawAux -notmatch "(?i)Enter\s+Aux" -and $Interp -notmatch "señal de llamada|INICIO DE LLAMADA|LÍNEA ABIERTA|FIN DE LLAMADA|CUELGUE MANUAL|EVASIÓN") {
+                        $CodigoRC = ""; if ($Obj.RawAux -match "(?i)ReasonCode[=\[>:\s]*(\d+)") { $CodigoRC = $matches[1] }
+                        $NombreRC = if ($CodigoRC -ne "" -and $CodigoRC -ne "0" -and $DictRC.ContainsKey($CodigoRC)) { $DictRC[$CodigoRC] } elseif ($CodigoRC -ne "" -and $CodigoRC -ne "0") { $CodigoRC } else { "" }
+                        if ($EsperandoDefaultPostLogin -or $EnDefaultPostLogin) {
+                            # Punto 1 (Pablo, 28/08/2026): el DEFAULT automático que Avaya dispara justo al firmarse
+                            # TAMBIÉN entra por "newState=Aux" sin "Enter Aux" (el "Enter Aux;code=ReasonCode[0]"
+                            # cae en un segundo ANTERIOR, fuera de RawAux de esta fila) — sin este guard se
+                            # mostraba como si el asesor hubiera dado clic en TrabAux justo al firmarse. No es un
+                            # clic del asesor, es el sistema. Mismo tratamiento que ya usan las ramas NUEVO_RC/Enter Aux.
+                            if ($EsperandoDefaultPostLogin) { $Interp = "Asesor firmado y en Default"; $ColorInterp = [System.Drawing.Color]::LimeGreen; $EsperandoDefaultPostLogin = $false; $EnDefaultPostLogin = $true }
+                            else { $Interp = "" }
+                            $CurrentReasonCode = "0"; $CurrentAux = "$symUser Estado: DEFAULT"; $CurrentColor = [System.Drawing.Color]::CadetBlue
+                        }
+                        elseif ($NombreRC -ne "") {
+                            # Opción C: dejar explícito que este Auxiliar vino del botón favorito (TrabAux), espejo
+                            # de "usando botón favorito AUTO-IN" que ya existe del lado de Disponible.
+                            $CurrentReasonCode = $CodigoRC; $UltimoMotivoElegido = $CodigoRC
+                            $Interp = "Asesor se cambia a Auxiliar [$NombreRC] (vía botón favorito)"; $CurrentAux = "$symUser Estado: AUXILIAR ($NombreRC)"; $CurrentColor = [System.Drawing.Color]::Orange
+                            $ColorInterp = [System.Drawing.Color]::Orange
+                            $EsperandoDefaultPostLogin = $false; $EnDefaultPostLogin = $false
+                        }
+                        else {
+                            # Puntos 2 y 3 (Pablo): TrabAux SIN elegir motivo. En vez de un "Auxiliar" genérico y
+                            # vacío, se usa $UltimoMotivoElegido — que NO se limpia al pasar por Disponible, solo
+                            # cuando se elige un motivo distinto — para precisar en qué auxiliar quedó el asesor,
+                            # replicando lo que la GUI de Avaya realmente muestra en este caso (confirmado por
+                            # Pablo: mostraba "Aux Sistemas", el último que había usado).
+                            # Ronda siguiente (Pablo): probamos "Detectado [X]" con la inferencia de
+                            # $UltimoMotivoElegido, pero un caso real (log 18/08/2026) mostró que Avaya CMS
+                            # aplicó un motivo DISTINTO al último que el asesor había elegido — nuestra
+                            # inferencia puede estar sencillamente equivocada (la causa real vive en la
+                            # configuración del conmutador, invisible en este log). Se quita la adivinanza:
+                            # solo se reporta el HECHO (auxiliar sin código elegido), sin aventurar cuál fue.
+                            $Interp = "Asesor se cambia a Auxiliar - se detectó un auxiliar sin código"
+                            $CurrentAux = "$symUser Estado: AUXILIAR"; $CurrentColor = [System.Drawing.Color]::LightCoral
+                            $ColorInterp = [System.Drawing.Color]::Orange
+                            $EsperandoDefaultPostLogin = $false; $EnDefaultPostLogin = $false
+                        }
+                        $Obj.Aux = $CurrentAux; $Obj.ColorAux = $CurrentColor
                     }
                     elseif ($Obj.Aux -match "ESTADO: READY" -and $Interp -notmatch "señal de llamada|INICIO DE LLAMADA|LÍNEA ABIERTA") {
                         # ESTADO: READY del XML = notificación de Avaya, no es clic del asesor.
@@ -2853,6 +4562,7 @@ $btnAnalizar.Add_Click({
                         # El único evento confiable de "cambió a disponible" es GUI_READY_CONFIRMADO.
                         $CurrentAux = "$symUser Estado: DISPONIBLE"; $CurrentColor = [System.Drawing.Color]::LimeGreen
                         $Obj.Aux = $CurrentAux; $Obj.ColorAux = $CurrentColor
+                        $EsperandoDefaultPostLogin = $false; $EnDefaultPostLogin = $false   # salió del DEFAULT post-logon
                         # $Interp queda vacío → fila se filtra si no tiene otros eventos en ese segundo
                     }
                     elseif ($Obj.Aux -match "NUEVO_RC_NOMBRE:([^|]+)" -and $Interp -notmatch "señal de llamada|INICIO DE LLAMADA|LÍNEA ABIERTA") {
@@ -2863,12 +4573,17 @@ $btnAnalizar.Add_Click({
                         $CurrentAux = if ($NombreRC -eq "DEFAULT") { "$symUser Estado: DEFAULT" } else { "$symUser Estado: AUXILIAR ($NombreRC)" }
                         $CurrentColor = if ($NombreRC -eq "DEFAULT") { [System.Drawing.Color]::CadetBlue } else { [System.Drawing.Color]::Orange }
                         $CurrentReasonCode = $NombreRC; $Obj.Aux = $CurrentAux; $Obj.ColorAux = $CurrentColor
+                        if ($NombreRC -ne "DEFAULT") { $UltimoMotivoElegido = $NombreRC }
                         if ($Interp -match "FIN DE LLAMADA|CUELGUE MANUAL") {
                             # FIN tiene prioridad visual — agregar nota compacta sin reemplazar
                             if ($NombreRC -ne "DEFAULT") { $Interp += "  +  Auxiliar [$NombreRC]" }
                         } else {
                             $Interp = "Asesor se cambia a Auxiliar [$NombreRC]"; $ColorInterp = [System.Drawing.Color]::Orange
-                            if ($NombreRC -eq "DEFAULT" -and $RecienFirmado -eq $true) { $Interp = "" }
+                            # DEFAULT automático que Avaya dispara al firmarse (2 veces): 1º → etiqueta clara; repetidos → ocultos.
+                            if ($NombreRC -eq "DEFAULT") {
+                                if ($EsperandoDefaultPostLogin)  { $Interp = "Asesor firmado y en Default"; $ColorInterp = [System.Drawing.Color]::LimeGreen; $EsperandoDefaultPostLogin = $false; $EnDefaultPostLogin = $true }
+                                elseif ($EnDefaultPostLogin)     { $Interp = "" }
+                            } else { $EsperandoDefaultPostLogin = $false; $EnDefaultPostLogin = $false }
                         }
                     }
                     elseif ($Obj.Aux -match "NUEVO_RC:(\d+)" -and $Interp -notmatch "señal de llamada|INICIO DE LLAMADA|LÍNEA ABIERTA") {
@@ -2877,6 +4592,7 @@ $btnAnalizar.Add_Click({
                         $NombreRC = if ($DictRC.ContainsKey($CodigoRC)) { $DictRC[$CodigoRC] } else { $CodigoRC }
                         if ($NombreRC -eq "0" -or $NombreRC -eq "") { $NombreRC = "DEFAULT" }
                         $CurrentReasonCode = $CodigoRC
+                        if ($CodigoRC -ne "0") { $UltimoMotivoElegido = $CodigoRC }
                         # Siempre actualizar estado del asesor (independiente de si hay FIN simultáneo)
                         $CurrentAux = "$symUser Estado: AUXILIAR ($NombreRC)"; $CurrentColor = [System.Drawing.Color]::Orange; $Obj.Aux = $CurrentAux; $Obj.ColorAux = $CurrentColor
                         if ($Interp -match "FIN DE LLAMADA|CUELGUE MANUAL") {
@@ -2885,14 +4601,18 @@ $btnAnalizar.Add_Click({
                             else { $CurrentAux = "$symUser Estado: DEFAULT"; $CurrentColor = [System.Drawing.Color]::CadetBlue; $Obj.Aux = $CurrentAux; $Obj.ColorAux = $CurrentColor }
                         } else {
                             $Interp = "Asesor se cambia a Auxiliar [$NombreRC] (Confirmado por clic)"; $ColorInterp = [System.Drawing.Color]::Orange
-                            if ($CodigoRC -eq "0" -and $RecienFirmado -eq $true) { $Interp = ""; $CurrentAux = "$symUser Estado: DEFAULT"; $CurrentColor = [System.Drawing.Color]::CadetBlue; $Obj.Aux = $CurrentAux; $Obj.ColorAux = $CurrentColor }
+                            if ($CodigoRC -eq "0") {
+                                if ($EsperandoDefaultPostLogin)  { $Interp = "Asesor firmado y en Default"; $ColorInterp = [System.Drawing.Color]::LimeGreen; $EsperandoDefaultPostLogin = $false; $EnDefaultPostLogin = $true }
+                                elseif ($EnDefaultPostLogin)     { $Interp = "" }
+                                $CurrentAux = "$symUser Estado: DEFAULT"; $CurrentColor = [System.Drawing.Color]::CadetBlue; $Obj.Aux = $CurrentAux; $Obj.ColorAux = $CurrentColor
+                            } else { $EsperandoDefaultPostLogin = $false; $EnDefaultPostLogin = $false }
                         }
                     }
                     elseif ($Obj.RawAux -match "(?i)Enter\s+Aux" -and $Interp -notmatch "señal de llamada|INICIO DE LLAMADA|LÍNEA ABIERTA") {
                         $CodigoRC = ""; if ($Obj.RawAux -match "(?i)ReasonCode[=\[>:\s]*(\d+)") { $CodigoRC = $matches[1] }
                         $NombreRC = if ($CodigoRC -ne "" -and $DictRC.ContainsKey($CodigoRC)) { $DictRC[$CodigoRC] } elseif ($CodigoRC -ne "") { $CodigoRC } else { "" }
                         # Siempre actualizar estado del asesor (independiente de si hay FIN simultáneo)
-                        if ($NombreRC -ne "") { $CurrentReasonCode = $CodigoRC; $CurrentAux = "$symUser Estado: AUXILIAR ($NombreRC)"; $CurrentColor = [System.Drawing.Color]::Orange; $Obj.Aux = $CurrentAux; $Obj.ColorAux = $CurrentColor }
+                        if ($NombreRC -ne "") { $CurrentReasonCode = $CodigoRC; $CurrentAux = "$symUser Estado: AUXILIAR ($NombreRC)"; $CurrentColor = [System.Drawing.Color]::Orange; $Obj.Aux = $CurrentAux; $Obj.ColorAux = $CurrentColor; if ($CodigoRC -ne "0") { $UltimoMotivoElegido = $CodigoRC } }
                         else                  { $CurrentAux = "$symUser Estado: AUXILIAR"; $CurrentColor = [System.Drawing.Color]::LightCoral; $Obj.Aux = $CurrentAux; $Obj.ColorAux = $CurrentColor }
                         if ($CodigoRC -eq "0") { $CurrentAux = "$symUser Estado: DEFAULT"; $CurrentColor = [System.Drawing.Color]::CadetBlue; $Obj.Aux = $CurrentAux; $Obj.ColorAux = $CurrentColor }
                         if ($Interp -match "FIN DE LLAMADA|CUELGUE MANUAL") {
@@ -2901,7 +4621,11 @@ $btnAnalizar.Add_Click({
                         } else {
                             if ($NombreRC -ne "") { $Interp = "Asesor se cambia a Auxiliar [$NombreRC]"; $ColorInterp = [System.Drawing.Color]::Orange }
                             else                  { $Interp = "Asesor se cambia a Auxiliar";             $ColorInterp = [System.Drawing.Color]::Orange }
-                            if ($CodigoRC -eq "0" -and $RecienFirmado) { $Interp = ""; $CurrentAux = "$symUser Estado: DEFAULT"; $CurrentColor = [System.Drawing.Color]::CadetBlue; $Obj.Aux = $CurrentAux; $Obj.ColorAux = $CurrentColor }
+                            if ($CodigoRC -eq "0") {
+                                if ($EsperandoDefaultPostLogin)  { $Interp = "Asesor firmado y en Default"; $ColorInterp = [System.Drawing.Color]::LimeGreen; $EsperandoDefaultPostLogin = $false; $EnDefaultPostLogin = $true }
+                                elseif ($EnDefaultPostLogin)     { $Interp = "" }
+                                $CurrentAux = "$symUser Estado: DEFAULT"; $CurrentColor = [System.Drawing.Color]::CadetBlue; $Obj.Aux = $CurrentAux; $Obj.ColorAux = $CurrentColor
+                            } else { $EsperandoDefaultPostLogin = $false; $EnDefaultPostLogin = $false }
                         }
                     }
 
@@ -2983,23 +4707,35 @@ $btnAnalizar.Add_Click({
 
                     $Obj.Interpretacion = $Interp; $Obj.ColorInterpretacion = $ColorInterp
 
-                    if ($RecienFirmado -eq $true -and $Obj.Agente -eq "" -and $Obj.Audio -eq "" -and $Obj.SysLog -eq "" -and $Obj.AppLog -eq "" -and $Obj.Ispeac -eq "" -and $Obj.Interpretacion -eq "") { if ($Obj.Aux -match "Estado: AUXILIAR") { $RecienFirmado = $false; continue } }
-                    if ($Obj.Interpretacion -eq "" -and $Obj.Agente -eq "" -and $Obj.Audio -eq "" -and $Obj.SysLog -eq "" -and $Obj.AppLog -eq "" -and $Obj.Ispeac -eq "") { if ($Obj.Aux -match "Estado:") { continue } }
+                    if ($RecienFirmado -eq $true -and $Obj.Agente -eq "" -and $Obj.Audio -eq "" -and $Obj.SysLog -eq "" -and $Obj.AppLog -eq "" -and $Obj.Ispeac -eq "" -and $Obj.Dtmf -eq "" -and $Obj.Interpretacion -eq "") { if ($Obj.Aux -match "Estado: AUXILIAR") { $RecienFirmado = $false; continue } }
+                    if ($Obj.Interpretacion -eq "" -and $Obj.Agente -eq "" -and $Obj.Audio -eq "" -and $Obj.SysLog -eq "" -and $Obj.AppLog -eq "" -and $Obj.Ispeac -eq "" -and $Obj.Dtmf -eq "") { if ($Obj.Aux -match "Estado:") { continue } }
                     if ($Interp -match "Usuario firmado exitosamente") { $RecienFirmado = $true } elseif ($Obj.Interpretacion -ne "" -or $Obj.Agente -ne "" -or $Obj.Audio -ne "" -or $Obj.Ispeac -ne "") { $RecienFirmado = $false }
 
                     $Row = $GridResultados.Rows.Add()
-                    # Mostrar ms reales en la columna Hora para "Asesor se cambia a Auxiliar": su slot es
-                    # base por diseño del estado del agente (mover el slot fragmentaría el estado), pero el
-                    # ms real vive en el log crudo (RawAux) → se extrae solo para mostrarlo, sin tocar el orden.
+                    # Mostrar ms reales en la columna Hora para "Asesor se cambia a Auxiliar" y para
+                    # "Asesor firmado y en Default": su slot es base por diseño del estado del agente
+                    # (mover el slot fragmentaría el estado), pero el ms real vive en el log crudo (RawAux)
+                    # → se extrae solo para mostrarlo, sin tocar el orden.
+                    # Se usa $Interp (etiqueta final del render), no $Obj.Interpretacion: las filas de estado
+                    # del agente construyen su etiqueta aquí y dejan Interpretacion vacía en el slot.
+                    # Los eventos de login/extensión también nacen en slot base (los escribe el Audio/Endpoint
+                    # log sobre $HoraLimpia); su ms real vive en el log crudo que sí se guardó:
+                    #   · estado del agente + "Usuario firmado exitosamente" → RawAux
+                    #   · "Extensión en línea…" y "Usuario intentando firmarse…" → RawInterpretacion
+                    # El regex acepta ':' (Endpoint/Audio: 16:10:06:409) y ',' (OneXAgent: 16:10:32,123).
                     $HoraCell = $H
-                    if ($H -notmatch ',' -and $Obj.Interpretacion -match "se cambia a Auxiliar" -and $Obj.RawAux -match ([regex]::Escape($H) + "[.,:](\d{1,3})")) {
-                        $HoraCell = "$H," + ($matches[1].PadRight(3,'0'))
+                    if ($H -notmatch ',' -and $Interp -match "se cambia a Auxiliar|se cambia a Disponible|Asesor firmado y en Default|Asesor se desfirma|Usuario firmado exitosamente|Extensión en línea|Usuario intentando firmarse|Fallo en el intento de firmarse") {
+                        $_reMs = [regex]::Escape($H) + "[.,:](\d{1,3})"
+                        if     ($Obj.RawAux            -match $_reMs) { $HoraCell = "$H," + ($matches[1].PadRight(3,'0')) }
+                        elseif ($Obj.RawInterpretacion -match $_reMs) { $HoraCell = "$H," + ($matches[1].PadRight(3,'0')) }
                     }
                     $GridResultados.Rows[$Row].Cells["Hora"].Value          = $HoraCell
                     $GridResultados.Rows[$Row].Cells["Sesion"].Value        = $Obj.Sesion
                     if ($Obj.Sesion -ne "-" -and $Obj.Sesion -ne "") { $GridResultados.Rows[$Row].Cells["Sesion"].Style.ForeColor = [System.Drawing.Color]::Cyan; $GridResultados.Rows[$Row].Cells["Sesion"].ToolTipText = "Clic para aislar y ver el historial completo de esta llamada" }
                     $GridResultados.Rows[$Row].Cells["Telefono"].Value      = $Obj.Tel
                     if ($Obj.Sesion -ne "-" -and $Obj.Sesion -ne "" -and $RawMapeoTel.ContainsKey($Obj.Sesion)) { $GridResultados.Rows[$Row].Cells["Telefono"].ToolTipText = "Clic para ver Log Original de extracción del número"; $GridResultados.Rows[$Row].Cells["Telefono"].Tag = $RawMapeoTel[$Obj.Sesion].Trim() }
+                    $GridResultados.Rows[$Row].Cells["EvDtmf"].Value        = $Obj.Dtmf;    $GridResultados.Rows[$Row].Cells["EvDtmf"].Style.ForeColor    = $Obj.ColorDtmf
+                    if ($Obj.RawDtmf -ne "")           { $GridResultados.Rows[$Row].Cells["EvDtmf"].ToolTipText = "Clic para ver el detalle por dígito (con milisegundos)"; $GridResultados.Rows[$Row].Cells["EvDtmf"].Tag = $Obj.RawDtmf.Trim() }
                     $GridResultados.Rows[$Row].Cells["Interpretacion"].Value = $Obj.Interpretacion; $GridResultados.Rows[$Row].Cells["Interpretacion"].Style.ForeColor = $Obj.ColorInterpretacion
                     $GridResultados.Rows[$Row].Cells["EvAgente"].Value      = $Obj.Agente;  $GridResultados.Rows[$Row].Cells["EvAgente"].Style.ForeColor  = $Obj.ColorAgente
                     $GridResultados.Rows[$Row].Cells["EvAudio"].Value       = $Obj.Audio;   $GridResultados.Rows[$Row].Cells["EvAudio"].Style.ForeColor   = $Obj.ColorAudio
@@ -3035,7 +4771,105 @@ $btnAnalizar.Add_Click({
     $Script:SnapAlertingHoras = $Script:AlertingHoras
     $lblStatus.Text = "Análisis completado para $TargetUser ($FechaVisualStr). XML cargado: $XMLCargado. Puedes usar EXTRACCIÓN RAW para ver logs crudos."
     $btnExtraccion.Enabled = $true; $btnBusqueda.Enabled = $true; $btnExportarCSV.Enabled = $true
+    # Botón de revisión de errores: solo visible si el análisis juntó posibles errores del código base.
+    $nErr = @($Script:ErroresSospechosos).Count
+    if ($nErr -gt 0) { $btnRevisarErrores.Text = "⚠ Revisar posibles errores ($nErr)"; $btnRevisarErrores.Visible = $true } else { $btnRevisarErrores.Visible = $false }
+
+    # ── Buscador de VACÍOS del proceso (día completo) ─────────────────────────────────────────
+    # Combina TODAS las líneas con timestamp del día (recolectadas durante PASO 3/4/5, sin releer
+    # archivos) y busca huecos ≥ $UmbralVacioMs donde NO hubo ni una sola línea — ni siquiera ruido
+    # interno — en los dos logs que maneja el propio proceso OneXAgent.exe (Endpoint+AvayaOneX).
+    # Cruza cada hueco contra IspeacLog (proceso INDEPENDIENTE): si Ispeac siguió reportando durante
+    # el vacío, había una llamada activa y el hueco es mucho más grave (el proceso principal se
+    # congeló con audio en vivo); si Ispeac también calló, es menos concluyente. (Pablo, 08/2026 —
+    # caso "llamada tardó 7s en asignarse pese a Auto Accept", validado con silencio real de 6.8s.)
+    $UmbralVacioMs = 3000
+    $Script:VaciosDetectados = @()
+    if ($Script:TsProceso.Count -ge 2) {
+        $tsOrdenado = @($Script:TsProceso | Sort-Object)
+        $tsIspeacOrdenado = @($Script:TsIspeac | Sort-Object)
+        $FmtMsDia = { param($m) $hh=[int]($m/3600000); $mm=[int](($m%3600000)/60000); $ss=[int](($m%60000)/1000); $fff=$m%1000; "{0:D2}:{1:D2}:{2:D2},{3:D3}" -f $hh,$mm,$ss,$fff }
+        for ($iV = 1; $iV -lt $tsOrdenado.Count; $iV++) {
+            $prevMs = $tsOrdenado[$iV - 1]; $curMs = $tsOrdenado[$iV]
+            $gapMs = $curMs - $prevMs
+            if ($gapMs -ge $UmbralVacioMs) {
+                $ispeacVivo = $false
+                foreach ($tI in $tsIspeacOrdenado) { if ($tI -gt $prevMs -and $tI -lt $curMs) { $ispeacVivo = $true; break } }
+                $Script:VaciosDetectados += [pscustomobject]@{
+                    HoraIni    = & $FmtMsDia $prevMs
+                    HoraFin    = & $FmtMsDia $curMs
+                    DurSeg     = [math]::Round($gapMs / 1000, 1)
+                    IspeacVivo = $ispeacVivo
+                }
+            }
+        }
+    }
+    $nVac = @($Script:VaciosDetectados).Count
+    if ($nVac -gt 0) { $btnVacios.Text = "🔍 Vacíos en logs ($nVac)"; $btnVacios.Visible = $true } else { $btnVacios.Visible = $false }
+
     $Form.Cursor = [System.Windows.Forms.Cursors]::Default
+})
+
+# --- Ventana aparte: posibles errores del código base (fuera del timeline) ---
+$btnRevisarErrores.Add_Click({
+    $errores = @($Script:ErroresSospechosos)
+    if ($errores.Count -eq 0) { [System.Windows.Forms.MessageBox]::Show("No hay posibles errores registrados en este análisis.","Revisar errores",[System.Windows.Forms.MessageBoxButtons]::OK,[System.Windows.Forms.MessageBoxIcon]::Information); return }
+    $FormErr = New-Object System.Windows.Forms.Form; $FormErr.Text = "Posibles errores del código base ($($errores.Count)) — NO están en el timeline"; $FormErr.Size = New-Object System.Drawing.Size(1200, 640); $FormErr.StartPosition = "CenterParent"; $FormErr.BackColor = $ColorFondo
+    $lblNota = New-Object System.Windows.Forms.Label; $lblNota.Text = "Líneas con ERROR/Exception/FATAL detectadas FUERA del timeline. La mayoría son benignas (renderizado, features, timeouts de red). Revisa la línea cruda para confirmar."; $lblNota.Location = New-Object System.Drawing.Point(15, 12); $lblNota.Size = New-Object System.Drawing.Size(1160, 20); $lblNota.ForeColor = [System.Drawing.Color]::Khaki
+    $lblFil = New-Object System.Windows.Forms.Label; $lblFil.Text = "Filtrar:"; $lblFil.Location = New-Object System.Drawing.Point(15, 42); $lblFil.AutoSize = $true; $lblFil.ForeColor = [System.Drawing.Color]::White
+    $txtFil = New-Object System.Windows.Forms.TextBox; $txtFil.Location = New-Object System.Drawing.Point(70, 39); $txtFil.Size = New-Object System.Drawing.Size(280, 25); $txtFil.BackColor = [System.Drawing.Color]::FromArgb(45,45,48); $txtFil.ForeColor = [System.Drawing.Color]::White
+    $GridErr = New-Object System.Windows.Forms.DataGridView; $GridErr.Size = New-Object System.Drawing.Size(1160, 520); $GridErr.Location = New-Object System.Drawing.Point(15, 72)
+    $GridErr.Anchor = [System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Bottom -bor [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Right
+    $GridErr.BackgroundColor = [System.Drawing.Color]::FromArgb(20,20,20); $GridErr.AllowUserToAddRows = $false; $GridErr.RowHeadersVisible = $false; $GridErr.ReadOnly = $true; $GridErr.AutoSizeColumnsMode = "Fill"
+    $GridErr.DefaultCellStyle.BackColor = [System.Drawing.Color]::FromArgb(20,20,20); $GridErr.DefaultCellStyle.ForeColor = [System.Drawing.Color]::Gainsboro
+    $GridErr.ColumnHeadersDefaultCellStyle.BackColor = [System.Drawing.Color]::FromArgb(10,10,10); $GridErr.ColumnHeadersDefaultCellStyle.ForeColor = [System.Drawing.Color]::White; $GridErr.EnableHeadersVisualStyles = $false
+    $GridErr.Columns.Add("Hora","Hora") | Out-Null; $GridErr.Columns["Hora"].FillWeight = 8
+    $GridErr.Columns.Add("Linea","Línea cruda del log") | Out-Null; $GridErr.Columns["Linea"].FillWeight = 92
+    $GridErr.SuspendLayout()
+    foreach ($it in ($errores | Sort-Object Hora)) {
+        $r = $GridErr.Rows.Add(); $GridErr.Rows[$r].Cells["Hora"].Value = $it.Hora; $GridErr.Rows[$r].Cells["Hora"].Style.ForeColor = [System.Drawing.Color]::White; $GridErr.Rows[$r].Cells["Linea"].Value = $it.Linea
+    }
+    $GridErr.ResumeLayout()
+    $txtFil.Add_TextChanged({ $t = $txtFil.Text.Trim(); $GridErr.SuspendLayout(); $GridErr.CurrentCell = $null; foreach ($row in $GridErr.Rows) { if ($t -eq "") { $row.Visible = $true } else { $row.Visible = ("$($row.Cells['Linea'].Value)" -match [regex]::Escape($t)) } }; $GridErr.ResumeLayout() })
+    $btnCerrarErr = New-Object System.Windows.Forms.Button; $btnCerrarErr.Text = "Cerrar"; $btnCerrarErr.Location = New-Object System.Drawing.Point(1065, 37); $btnCerrarErr.Size = New-Object System.Drawing.Size(110, 28); $btnCerrarErr.BackColor = [System.Drawing.Color]::Gray; $btnCerrarErr.ForeColor = [System.Drawing.Color]::White; $btnCerrarErr.FlatStyle = "Flat"; $btnCerrarErr.Anchor = [System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Right
+    $btnCerrarErr.Add_Click({ $FormErr.Close() })
+    $FormErr.Controls.AddRange(@($lblNota, $lblFil, $txtFil, $GridErr, $btnCerrarErr))
+    $FormErr.ShowDialog() | Out-Null
+})
+
+# --- Ventana aparte: vacíos de log del día (silencio total en Endpoint+AvayaOneX) ---
+$btnVacios.Add_Click({
+    $vacios = @($Script:VaciosDetectados)
+    if ($vacios.Count -eq 0) { [System.Windows.Forms.MessageBox]::Show("No se detectaron vacíos de log en este análisis.","Vacíos en logs",[System.Windows.Forms.MessageBoxButtons]::OK,[System.Windows.Forms.MessageBoxIcon]::Information); return }
+    $FormVac = New-Object System.Windows.Forms.Form; $FormVac.Text = "Vacíos de log detectados ($($vacios.Count)) — silencio total en Endpoint+AvayaOneX (día completo)"; $FormVac.Size = New-Object System.Drawing.Size(1000, 620); $FormVac.StartPosition = "CenterParent"; $FormVac.BackColor = $ColorFondo
+    $lblNotaV = New-Object System.Windows.Forms.Label; $lblNotaV.Text = "Umbral: ≥3s sin NINGUNA línea en Endpoint.log ni AvayaOneX.log (los 2 logs del propio proceso OneXAgent.exe). `"¿Llamada activa?`" = SÍ significa que IspeacLog (proceso independiente) siguió reportando durante el vacío — el proceso principal se congeló con audio EN VIVO, mucho más grave. Un NO no descarta el problema, solo que no se pudo corroborar con Ispeac."; $lblNotaV.Location = New-Object System.Drawing.Point(15, 12); $lblNotaV.Size = New-Object System.Drawing.Size(960, 48); $lblNotaV.ForeColor = [System.Drawing.Color]::Khaki
+    $GridVac = New-Object System.Windows.Forms.DataGridView; $GridVac.Size = New-Object System.Drawing.Size(960, 480); $GridVac.Location = New-Object System.Drawing.Point(15, 68)
+    $GridVac.Anchor = [System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Bottom -bor [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Right
+    $GridVac.BackgroundColor = [System.Drawing.Color]::FromArgb(20,20,20); $GridVac.AllowUserToAddRows = $false; $GridVac.RowHeadersVisible = $false; $GridVac.ReadOnly = $true; $GridVac.AutoSizeColumnsMode = "Fill"
+    $GridVac.DefaultCellStyle.BackColor = [System.Drawing.Color]::FromArgb(20,20,20); $GridVac.DefaultCellStyle.ForeColor = [System.Drawing.Color]::Gainsboro
+    $GridVac.ColumnHeadersDefaultCellStyle.BackColor = [System.Drawing.Color]::FromArgb(10,10,10); $GridVac.ColumnHeadersDefaultCellStyle.ForeColor = [System.Drawing.Color]::White; $GridVac.EnableHeadersVisualStyles = $false
+    $GridVac.Columns.Add("Inicio","Inicio del vacío") | Out-Null; $GridVac.Columns["Inicio"].FillWeight = 22
+    $GridVac.Columns.Add("Fin","Reanuda en") | Out-Null; $GridVac.Columns["Fin"].FillWeight = 22
+    $GridVac.Columns.Add("Dur","Duración") | Out-Null; $GridVac.Columns["Dur"].FillWeight = 16
+    $GridVac.Columns.Add("Ispeac","¿Llamada activa? (Ispeac vivo)") | Out-Null; $GridVac.Columns["Ispeac"].FillWeight = 40
+    $GridVac.SuspendLayout()
+    foreach ($v in ($vacios | Sort-Object HoraIni)) {
+        $r = $GridVac.Rows.Add()
+        $GridVac.Rows[$r].Cells["Inicio"].Value = $v.HoraIni
+        $GridVac.Rows[$r].Cells["Fin"].Value    = $v.HoraFin
+        $GridVac.Rows[$r].Cells["Dur"].Value    = "$($v.DurSeg) s"
+        if ($v.IspeacVivo) {
+            $GridVac.Rows[$r].Cells["Ispeac"].Value = "SÍ — congelamiento con llamada activa"
+            $GridVac.Rows[$r].DefaultCellStyle.ForeColor = [System.Drawing.Color]::OrangeRed
+        } else {
+            $GridVac.Rows[$r].Cells["Ispeac"].Value = "No (sin corroborar con Ispeac)"
+        }
+    }
+    $GridVac.ResumeLayout()
+    $btnCerrarVac = New-Object System.Windows.Forms.Button; $btnCerrarVac.Text = "Cerrar"; $btnCerrarVac.Location = New-Object System.Drawing.Point(865, 558); $btnCerrarVac.Size = New-Object System.Drawing.Size(110, 28); $btnCerrarVac.BackColor = [System.Drawing.Color]::Gray; $btnCerrarVac.ForeColor = [System.Drawing.Color]::White; $btnCerrarVac.FlatStyle = "Flat"; $btnCerrarVac.Anchor = [System.Windows.Forms.AnchorStyles]::Bottom -bor [System.Windows.Forms.AnchorStyles]::Right
+    $btnCerrarVac.Add_Click({ $FormVac.Close() })
+    $FormVac.Controls.AddRange(@($lblNotaV, $GridVac, $btnCerrarVac))
+    $FormVac.ShowDialog() | Out-Null
 })
 
 # ====================================================================
@@ -4552,7 +6386,7 @@ $mnuDetalleTransf.Add_Click({
         $r = $GridResultados.Rows[$i]
         if ($r.IsNewRow) { continue }
         $av = $r.Cells["EvAgente"].Value
-        if ($av -match "TRANSFERENCIA INICIADA|TRANSFERENCIA EN PROCESO") {
+        if ($av -match "TRANSFERENCIA INICIADA|Asesor presiona bot.n Transferir|TRANSFERENCIA EN PROCESO") {
             $HoraInicio = $r.Cells["Hora"].Value; break
         }
     }
@@ -4595,7 +6429,7 @@ $mnuDetalleTransf.Add_Click({
             if ($RawPressTransfer -eq "" -and $tg -match "[^\r\n]*OnRequestTransferSession\(\)[^\r\n]*")          { $RawPressTransfer = $matches[0].Trim() }
             if ($RawActivate      -eq "" -and $tg -match "[^\r\n]*Transfer_ActivateConsultCall[^\r\n]*")          { $RawActivate      = $matches[0].Trim() }
         }
-        if ($i -lt $RowIdx -and $r.Cells["EvAgente"].Value -match "TRANSFERENCIA INICIADA") { break }
+        if ($i -lt $RowIdx -and $r.Cells["EvAgente"].Value -match "TRANSFERENCIA INICIADA|Asesor presiona bot.n Transferir") { break }
     }
 
     # ── Ventana ─────────────────────────────────────────────────────
@@ -4820,7 +6654,7 @@ $GridResultados.Add_CellClick({
     param($sender, $e)
     if ($e.RowIndex -ge 0) {
         $ColName = $GridResultados.Columns[$e.ColumnIndex].Name
-        $ColumnasRegulares = @("Interpretacion","EvAgente","EvAudio","EvAux","EvSysLog","EvAppLog","EvIspeac")
+        $ColumnasRegulares = @("Interpretacion","EvAgente","EvAudio","EvAux","EvSysLog","EvAppLog","EvIspeac","EvDtmf")
 
         # Popup de "Validación AutoAnswer" RETIRADO: el modo de contestación (automática/manual)
         # ahora se muestra directamente en la fila del INICIO DE LLAMADA. El bloque inferior queda
@@ -4934,9 +6768,12 @@ $btnExtraccion.Add_Click({
     $mtbT1 = New-Object System.Windows.Forms.MaskedTextBox; $mtbT1.Mask = "00:00:00"; $mtbT1.Location = New-Object System.Drawing.Point(160, 18); $mtbT1.Size = New-Object System.Drawing.Size(150, 25); $mtbT1.Text = "000000"; $mtbT1.InsertKeyMode = [System.Windows.Forms.InsertKeyMode]::Overwrite; $mtbT1.BackColor = $ColorFondo; $mtbT1.ForeColor = [System.Drawing.Color]::LimeGreen; $mtbT1.Font = New-Object System.Drawing.Font("Consolas", 11)
     $lblT2 = New-Object System.Windows.Forms.Label; $lblT2.Text = "Hora Fin:"; $lblT2.Location = New-Object System.Drawing.Point(20, 60); $lblT2.AutoSize = $true
     $mtbT2 = New-Object System.Windows.Forms.MaskedTextBox; $mtbT2.Mask = "00:00:00"; $mtbT2.Location = New-Object System.Drawing.Point(160, 58); $mtbT2.Size = New-Object System.Drawing.Size(150, 25); $mtbT2.Text = "235959"; $mtbT2.InsertKeyMode = [System.Windows.Forms.InsertKeyMode]::Overwrite; $mtbT2.BackColor = $ColorFondo; $mtbT2.ForeColor = [System.Drawing.Color]::LimeGreen; $mtbT2.Font = New-Object System.Drawing.Font("Consolas", 11)
-    # Al entrar al campo (clic o Tab), posicionar el cursor al inicio para teclear de corrido
-    $mtbT1.Add_Enter({ $this.SelectionStart = 0; $this.SelectionLength = 0 })
-    $mtbT2.Add_Enter({ $this.SelectionStart = 0; $this.SelectionLength = 0 })
+    # Al entrar al campo (clic o Tab), posicionar el cursor al inicio para teclear de corrido.
+    # El MaskedTextBox reubica el caret al FINAL después de disparar Enter, así que un
+    # SelectionStart=0 directo queda pisado. Se difiere con BeginInvoke para que corra
+    # DESPUÉS de que el control termine de asentar el foco. GetNewClosure captura el control.
+    $mtbT1.Add_Enter({ $ctl = $this; $ctl.BeginInvoke([Action]({ $ctl.SelectionStart = 0; $ctl.SelectionLength = 0 }.GetNewClosure())) | Out-Null })
+    $mtbT2.Add_Enter({ $ctl = $this; $ctl.BeginInvoke([Action]({ $ctl.SelectionStart = 0; $ctl.SelectionLength = 0 }.GetNewClosure())) | Out-Null })
     # Fecha VISIBLE en el diálogo: antes se tomaba en silencio del picker principal y una fecha
     # equivocada producía "No se encontró actividad" sin pista de la causa.
     $lblTF = New-Object System.Windows.Forms.Label; $lblTF.Text = "Fecha de los logs:"; $lblTF.Location = New-Object System.Drawing.Point(20, 100); $lblTF.AutoSize = $true
@@ -5019,7 +6856,7 @@ $btnExtraccion.Add_Click({
         $GridRaw.ResumeLayout()
 
         $btnExportarCSV = New-Object System.Windows.Forms.Button; $btnExportarCSV.Text = "EXPORTAR RESULTADOS A CSV"; $btnExportarCSV.Location = New-Object System.Drawing.Point(15, 710); $btnExportarCSV.Size = New-Object System.Drawing.Size(250, 35); $btnExportarCSV.BackColor = [System.Drawing.Color]::DarkGreen; $btnExportarCSV.ForeColor = [System.Drawing.Color]::White; $btnExportarCSV.FlatStyle = "Flat"; $btnExportarCSV.Font = New-Object System.Drawing.Font("Segoe UI", 10, [System.Drawing.FontStyle]::Bold)
-        $btnExportarCSV.Add_Click({ $sd = New-Object System.Windows.Forms.SaveFileDialog; $sd.Filter = "Archivo CSV (*.csv)|*.csv"; $sd.FileName = "Extraccion_RAW_Avaya_$($HoraInicioStr.Replace(':',''))_a_$($HoraFinStr.Replace(':','')).csv"; if ($sd.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { $CsvData=@(); foreach($row in $GridRaw.Rows){$CsvData+=[PSCustomObject]@{Hora=$row.Cells["Hora"].Value;EndpointLog=$row.Cells["Endpoint"].Value;AvayaOneXLog=$row.Cells["OneX"].Value;AudioLog=$row.Cells["Audio"].Value;IspeacLog=$row.Cells["Ispeac"].Value}}; $CsvData|Export-Csv -Path $sd.FileName -NoTypeInformation -Encoding UTF8; [System.Windows.Forms.MessageBox]::Show("¡Exportación exitosa!","Éxito",[System.Windows.Forms.MessageBoxButtons]::OK,[System.Windows.Forms.MessageBoxIcon]::Information) } })
+        $btnExportarCSV.Add_Click({ $sd = New-Object System.Windows.Forms.SaveFileDialog; $sd.Filter = "Archivo CSV (*.csv)|*.csv"; $sd.FileName = "LogsAvaya-$(if($txtIP.Text.Trim() -ne ''){$txtIP.Text.Trim()}else{'SinIP'})_$($HoraInicioStr.Replace(':',''))_a_$($HoraFinStr.Replace(':',''))_$($dtpFecha.Value.ToString('ddMMyyyy')).csv"; if ($sd.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { $CsvData=@(); foreach($row in $GridRaw.Rows){$CsvData+=[PSCustomObject]@{Hora=$row.Cells["Hora"].Value;EndpointLog=$row.Cells["Endpoint"].Value;AvayaOneXLog=$row.Cells["OneX"].Value;AudioLog=$row.Cells["Audio"].Value;IspeacLog=$row.Cells["Ispeac"].Value}}; $CsvData|Export-Csv -Path $sd.FileName -NoTypeInformation -Encoding UTF8; [System.Windows.Forms.MessageBox]::Show("¡Exportación exitosa!","Éxito",[System.Windows.Forms.MessageBoxButtons]::OK,[System.Windows.Forms.MessageBoxIcon]::Information) } })
 
         $lblBuscarRAW = New-Object System.Windows.Forms.Label; $lblBuscarRAW.Text = "Buscar en Logs:"; $lblBuscarRAW.Location = New-Object System.Drawing.Point(300, 718); $lblBuscarRAW.AutoSize = $true; $lblBuscarRAW.ForeColor = [System.Drawing.Color]::White
         $txtBuscarRAW = New-Object System.Windows.Forms.TextBox; $txtBuscarRAW.Location = New-Object System.Drawing.Point(400, 715); $txtBuscarRAW.Size = New-Object System.Drawing.Size(200, 25); $txtBuscarRAW.BackColor = [System.Drawing.Color]::FromArgb(45,45,48); $txtBuscarRAW.ForeColor = [System.Drawing.Color]::White
@@ -5059,13 +6896,22 @@ $btnBusqueda.Add_Click({
     $lblF = New-Object System.Windows.Forms.Label; $lblF.Text = "Fecha a escanear:"; $lblF.Location = New-Object System.Drawing.Point(580,20); $lblF.AutoSize = $true
     $dtpF = New-Object System.Windows.Forms.DateTimePicker; $dtpF.Location = New-Object System.Drawing.Point(690,18); $dtpF.Size = New-Object System.Drawing.Size(110,25); $dtpF.Format = [System.Windows.Forms.DateTimePickerFormat]::Custom; $dtpF.CustomFormat = "dd/MM/yyyy"; $dtpF.Value = $dtpFecha.Value
     $btnEjecutar = New-Object System.Windows.Forms.Button; $btnEjecutar.Text = "BUSCAR"; $btnEjecutar.Location = New-Object System.Drawing.Point(820,16); $btnEjecutar.Size = New-Object System.Drawing.Size(100,28); $btnEjecutar.BackColor = [System.Drawing.Color]::Teal; $btnEjecutar.FlatStyle = "Flat"; $btnEjecutar.Font = New-Object System.Drawing.Font("Segoe UI",9,[System.Drawing.FontStyle]::Bold)
-    $lblEstatusB = New-Object System.Windows.Forms.Label; $lblEstatusB.Location = New-Object System.Drawing.Point(20,50); $lblEstatusB.Size = New-Object System.Drawing.Size(1140,20); $lblEstatusB.ForeColor = [System.Drawing.Color]::Yellow; $lblEstatusB.Text = "Ejemplo: LogoutRequest, AgentState, closeSignalingChannel"
+    # Checkbox para ignorar el filtro de fecha y buscar en TODO lo que exista en los archivos (útil cuando
+    # no se sabe de qué día viene un evento/número, ya que los logs rotan por tamaño y un solo archivo
+    # puede abarcar varios días). Al activarse, se deshabilita el selector de fecha (ya no aplica). (Pablo, 08/2026.)
+    # Fila 2 (y=50): estatus + checkbox + exportar, uno junto al otro (antes el checkbox vivía en la fila 1,
+    # de 2 líneas de alto, y se traslapaba con el botón EXPORTAR CSV de abajo). Pablo, 18/08/2026.
+    $lblEstatusB = New-Object System.Windows.Forms.Label; $lblEstatusB.Location = New-Object System.Drawing.Point(20,52); $lblEstatusB.Size = New-Object System.Drawing.Size(520,20); $lblEstatusB.ForeColor = [System.Drawing.Color]::Yellow; $lblEstatusB.Text = "Ejemplo: LogoutRequest, AgentState, closeSignalingChannel"
+    $chkTodasFechas = New-Object System.Windows.Forms.CheckBox; $chkTodasFechas.Text = "Buscar en todos los días disponibles"; $chkTodasFechas.Location = New-Object System.Drawing.Point(550,51); $chkTodasFechas.Size = New-Object System.Drawing.Size(300,20); $chkTodasFechas.ForeColor = [System.Drawing.Color]::LimeGreen; $chkTodasFechas.Font = New-Object System.Drawing.Font("Segoe UI",8.5)
+    $chkTodasFechas.Add_CheckedChanged({ $dtpF.Enabled = -not $chkTodasFechas.Checked }.GetNewClosure())
+    $btnExportarBusq = New-Object System.Windows.Forms.Button; $btnExportarBusq.Text = "EXPORTAR CSV"; $btnExportarBusq.Location = New-Object System.Drawing.Point(860,48); $btnExportarBusq.Size = New-Object System.Drawing.Size(140,24); $btnExportarBusq.BackColor = [System.Drawing.Color]::DarkSlateBlue; $btnExportarBusq.FlatStyle = "Flat"; $btnExportarBusq.Font = New-Object System.Drawing.Font("Segoe UI",8.5,[System.Drawing.FontStyle]::Bold)
     $GridB = New-Object System.Windows.Forms.DataGridView; $GridB.Location = New-Object System.Drawing.Point(20,75); $GridB.Size = New-Object System.Drawing.Size(1140,470)
     $GridB.BackgroundColor = [System.Drawing.Color]::FromArgb(20,20,20); $GridB.AllowUserToAddRows = $false; $GridB.RowHeadersVisible = $false; $GridB.ReadOnly = $true; $GridB.AutoSizeColumnsMode = "Fill"
     $GridB.DefaultCellStyle.BackColor = [System.Drawing.Color]::FromArgb(20,20,20); $GridB.ColumnHeadersDefaultCellStyle.BackColor = [System.Drawing.Color]::FromArgb(10,10,10); $GridB.ColumnHeadersDefaultCellStyle.ForeColor = [System.Drawing.Color]::White; $GridB.EnableHeadersVisualStyles = $false
+    $GridB.Columns.Add("Fecha","Fecha") | Out-Null; $GridB.Columns["Fecha"].FillWeight = 10
     $GridB.Columns.Add("Hora","Hora") | Out-Null; $GridB.Columns["Hora"].FillWeight = 10
     $GridB.Columns.Add("Archivo","Archivo Origen") | Out-Null; $GridB.Columns["Archivo"].FillWeight = 15
-    $GridB.Columns.Add("Log","Línea de Log Encontrada") | Out-Null; $GridB.Columns["Log"].FillWeight = 75
+    $GridB.Columns.Add("Log","Línea de Log Encontrada") | Out-Null; $GridB.Columns["Log"].FillWeight = 65
 
     $btnEjecutar.Add_Click({
         $terminosInput = $txtP.Text.Trim()
@@ -5086,6 +6932,8 @@ $btnBusqueda.Add_Click({
         $BF1 = $dtpF.Value.ToString("MM/dd/yyyy"); $BF3 = $dtpF.Value.ToString("yyyy-MM-dd"); $BF4 = $dtpF.Value.ToString("M/d/yyyy")
         $FechaOmniBusq = "(?:$([regex]::Escape($BF1))|$([regex]::Escape($BF3))|$([regex]::Escape($BF4)))"
         $TieneFechaRegex = "\d{1,2}[/\\]\d{1,2}[/\\]\d{2,4}|\d{4}-\d{2}-\d{2}"
+        $BuscarTodasFechas = $chkTodasFechas.Checked
+        $FormatosFechaBusq = @("MM/dd/yyyy","yyyy-MM-dd","M/d/yyyy")
 
         function Buscar-En-Archivos { param([string]$Filtro,[string]$NombreFuente,[switch]$EsOneX)
             $Archivos = $null
@@ -5097,13 +6945,26 @@ $btnBusqueda.Add_Click({
                 $Lineas = Get-Content -Path $Archivo.FullName -Encoding UTF8 -ReadCount 1000 -EA SilentlyContinue
                 if (-not $Lineas) { continue }
                 $UltimaHoraVista = "---"
-                $EsFechaCorrecta = $false
+                $UltimaFechaVista = "---"
+                $UltimaFechaOrden = "00000000"
+                $EsFechaCorrecta = $BuscarTodasFechas
                 foreach ($bloque in $Lineas) { foreach ($linea in $bloque) {
-                    # Actualizar flag de fecha cuando la línea trae timestamp de fecha
-                    if ($linea -match $TieneFechaRegex) { $EsFechaCorrecta = ($linea -match $FechaOmniBusq) }
+                    # Actualizar flag de fecha cuando la línea trae timestamp de fecha. Si "Buscar en todos
+                    # los días" está activo, no se descarta nada por fecha, pero igual se registra la fecha
+                    # vista para poder mostrar en qué día apareció cada coincidencia.
+                    if ($linea -match $TieneFechaRegex) {
+                        $textoFecha = $matches[0]
+                        $dtParsed = [datetime]::MinValue
+                        foreach ($fmtF in $FormatosFechaBusq) {
+                            if ([datetime]::TryParseExact($textoFecha, $fmtF, [System.Globalization.CultureInfo]::InvariantCulture, [System.Globalization.DateTimeStyles]::None, [ref]$dtParsed)) {
+                                $UltimaFechaVista = $dtParsed.ToString("dd/MM/yyyy"); $UltimaFechaOrden = $dtParsed.ToString("yyyyMMdd"); break
+                            }
+                        }
+                        if (-not $BuscarTodasFechas) { $EsFechaCorrecta = ($linea -match $FechaOmniBusq) }
+                    }
                     if (-not $EsFechaCorrecta) { continue }
                     if ($linea -match "(?:^|\[|\s)(\d{2}:\d{2}:\d{2})(?:[.,:]\d{1,3})?") { $UltimaHoraVista = $matches[1] }
-                    if ($linea -match $RegexBusqueda) { [void]$ResultadosLocales.Add([PSCustomObject]@{Hora=$UltimaHoraVista;Archivo=$NombreFuente;Texto=$linea}) }
+                    if ($linea -match $RegexBusqueda) { [void]$ResultadosLocales.Add([PSCustomObject]@{Hora=$UltimaHoraVista;Fecha=$UltimaFechaVista;FechaOrden=$UltimaFechaOrden;Archivo=$NombreFuente;Texto=$linea}) }
                 }}
             }
             return $ResultadosLocales
@@ -5117,10 +6978,10 @@ $btnBusqueda.Add_Click({
             $R2=@(Buscar-En-Archivos -NombreFuente "AvayaOneX.log" -EsOneX); if($R2.Count -gt 0){$ResultadosRAW.AddRange($R2)}
             $R3=@(Buscar-En-Archivos -Filtro "AudioLog.txt*" -NombreFuente "Audio.log"); if($R3.Count -gt 0){$ResultadosRAW.AddRange($R3)}
             $R4=@(Buscar-En-Archivos -Filtro "IspeacLog.txt*" -NombreFuente "Ispeac.log"); if($R4.Count -gt 0){$ResultadosRAW.AddRange($R4)}
-            $ResultadosOrdenados = $ResultadosRAW | Sort-Object Hora
+            $ResultadosOrdenados = $ResultadosRAW | Sort-Object FechaOrden,Hora
             $GridB.SuspendLayout()
             foreach ($item in $ResultadosOrdenados) {
-                $r=$GridB.Rows.Add(); $GridB.Rows[$r].Cells["Hora"].Value=$item.Hora; $GridB.Rows[$r].Cells["Archivo"].Value=$item.Archivo; $GridB.Rows[$r].Cells["Log"].Value=$item.Texto
+                $r=$GridB.Rows.Add(); $GridB.Rows[$r].Cells["Fecha"].Value=$item.Fecha; $GridB.Rows[$r].Cells["Hora"].Value=$item.Hora; $GridB.Rows[$r].Cells["Archivo"].Value=$item.Archivo; $GridB.Rows[$r].Cells["Log"].Value=$item.Texto
                 switch ($item.Archivo) {"Endpoint.log"{$GridB.Rows[$r].Cells["Archivo"].Style.ForeColor=[System.Drawing.Color]::Cyan} "AvayaOneX.log"{$GridB.Rows[$r].Cells["Archivo"].Style.ForeColor=[System.Drawing.Color]::MediumOrchid} "Audio.log"{$GridB.Rows[$r].Cells["Archivo"].Style.ForeColor=[System.Drawing.Color]::LimeGreen} "Ispeac.log"{$GridB.Rows[$r].Cells["Archivo"].Style.ForeColor=[System.Drawing.Color]::Orange}}
             }
             $GridB.ResumeLayout()
@@ -5129,7 +6990,36 @@ $btnBusqueda.Add_Click({
         finally { if($Script:RutaManual -eq ""){if(Get-PSDrive -Name $Script:DriveName -EA SilentlyContinue){Remove-PSDrive -Name $Script:DriveName -Force -EA SilentlyContinue|Out-Null}}; $FormB.Cursor=[System.Windows.Forms.Cursors]::Default }
     })
 
-    $FormB.Controls.AddRange(@($lblP,$txtP,$lblF,$dtpF,$btnEjecutar,$lblEstatusB,$GridB))
+    # Exportar los resultados actuales de la búsqueda a CSV (mismo patrón que "8. EXPORTAR" del grid principal).
+    $btnExportarBusq.Add_Click({
+        if ($GridB.Rows.Count -eq 0) { [System.Windows.Forms.MessageBox]::Show("No hay resultados para exportar. Realiza una búsqueda primero.","Aviso",[System.Windows.Forms.MessageBoxButtons]::OK,[System.Windows.Forms.MessageBoxIcon]::Warning); return }
+        $sfdB = New-Object System.Windows.Forms.SaveFileDialog
+        $sfdB.Filter = "Archivo CSV (*.csv)|*.csv"
+        $sfdB.Title  = "Exportar resultados de búsqueda a CSV"
+        $sfdB.FileName = "Busqueda_$($txtP.Text.Trim() -replace '[\\/:*?""<>|,]','_')_$(Get-Date -Format 'yyyy-MM-dd_HHmmss')"
+        if ($sfdB.ShowDialog() -ne [System.Windows.Forms.DialogResult]::OK) { return }
+        try {
+            $sbB = New-Object System.Text.StringBuilder
+            $colsVisiblesB = @($GridB.Columns | Where-Object { $_.Visible })
+            $headersB = $colsVisiblesB | ForEach-Object { '"' + $_.HeaderText.Replace('"','""') + '"' }
+            [void]$sbB.AppendLine($headersB -join ",")
+            foreach ($rowB in $GridB.Rows) {
+                if ($rowB.IsNewRow) { continue }
+                $valuesB = $colsVisiblesB | ForEach-Object {
+                    $vB = if ($null -ne $rowB.Cells[$_.Name].Value) { $rowB.Cells[$_.Name].Value.ToString() } else { "" }
+                    '"' + $vB.Replace('"','""') + '"'
+                }
+                [void]$sbB.AppendLine($valuesB -join ",")
+            }
+            $encB = New-Object System.Text.UTF8Encoding($true)
+            [System.IO.File]::WriteAllText($sfdB.FileName, $sbB.ToString(), $encB)
+            [System.Windows.Forms.MessageBox]::Show("CSV exportado correctamente:`n$($sfdB.FileName)","Exportación exitosa",[System.Windows.Forms.MessageBoxButtons]::OK,[System.Windows.Forms.MessageBoxIcon]::Information)
+        } catch {
+            [System.Windows.Forms.MessageBox]::Show("Error al exportar: $($_.Exception.Message)","Error",[System.Windows.Forms.MessageBoxButtons]::OK,[System.Windows.Forms.MessageBoxIcon]::Error)
+        }
+    })
+
+    $FormB.Controls.AddRange(@($lblP,$txtP,$lblF,$dtpF,$chkTodasFechas,$btnEjecutar,$lblEstatusB,$btnExportarBusq,$GridB))
     $FormB.ShowDialog() | Out-Null
 })
 
@@ -5244,3 +7134,4 @@ $ScriptPayload = @"
 
 # ====================================================================
 $Form.ShowDialog() | Out-Null
+

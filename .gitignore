@@ -38,7 +38,12 @@ Firmarse*/
 # Respaldos / checkpoints de versiones anteriores del codigo (NO el V22 actual)
 AnalizadorOneXV2*.ps1
 Auditoria*.ps1
+# Checkpoints con fecha (_YYYYMMDD_pre-...ps1): copias completas del script antes de cada cambio
+_20*.ps1
 !AnalizadorOneXV22.ps1
+
+# Copias con extension .ps_ (renombradas para poder enviarse por correo, Exchange bloquea .ps1)
+*.ps_
 
 # Notas sueltas de trabajo
 cambios*.txt
