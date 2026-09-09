@@ -453,6 +453,13 @@ $btnAnalizar.Add_Click({
     $UltimoMotivoElegidoP4 = ""
     $UltimoPendingAuxLogoutSlot = ""
     $UltimoSlotAuxClicMs = ""   # slot ms del último "Asesor se cambia a Auxiliar... (Confirmado por clic)" — por si hay que reetiquetarlo a "pendiente"
+    # --- Intento de desfirme (LogoutAgentHandler) que puede FALLAR ---
+    # Si al pedir el logout hay una llamada activa/entrante justo en ese instante, Avaya puede rechazarlo
+    # ("Session_LogoutAgent failed...Call not disconnected") y el asesor queda pegado en un PendingAux
+    # residual hasta que esa llamada termina — sin verse desfirmado en realidad (caso Pablo, 01/09/2026).
+    $UltimoSlotDesfirmeSolicitado = ""   # slot base (bare-hour) del último "LogoutAgent...code=ReasonCode[10]"
+    $DesfirmeEnProceso = $false          # true entre la solicitud y el "GUI Method ENDED: LogoutAgentHandler" (éxito o fallo)
+    $PendingAuxEsResiduoDesfirme = $false # true si el PendingAux en curso es residuo de un intento de desfirme fallido, no un Auxiliar real
     $GuiHoldSeg = @{}; $GuiUnholdSeg = @{}; $GuiEndSeg = @{}   # segundo del clic GUI (Hold/UnHold/EndCall) → sella "✓ clic confirmado" en el evento manual del EndpointLog
     $TransfClicSeg   = @{}           # segundo (HH:mm:ss) del clic GUI "TransferCallHandler STARTED" → etiqueta "Asesor presiona botón Transferir" (distingue manual vs automática) y evita duplicar con OnRequestTransferSession
     $EndTransferSeg  = @{}           # segundo (HH:mm:ss) de "End Executing method Transfer" (PASO 4/OneXAgent) → detecta retomado automático de la llamada tras fallo de transferencia
@@ -875,10 +882,37 @@ $btnAnalizar.Add_Click({
                             # no relevante para el timeline — el punto es medir el "pulso" real del proceso.
                             if ($HoraLimpia -match '^(\d{2}):(\d{2}):(\d{2})$') { $Script:TsProceso.Add(([int64]$matches[1])*3600000L + ([int64]$matches[2])*60000L + ([int64]$matches[3])*1000L + [int64]$MsLimpio) }
 
+                            # --- Intento de desfirme (LogoutAgentHandler) que puede FALLAR ---
+                            # "LogoutAgent:session=...;code=ReasonCode[10]" es la solicitud (misma línea que ya
+                            # capturaba el bucket de reason codes más abajo como "SISTEMA_LOGOUT|" en el slot
+                            # BASE $HoraLimpia). Si unos segundos después llega "Session_LogoutAgent failed"
+                            # (Avaya rechazó el logout — típicamente "Call not disconnected" por una llamada
+                            # activa/entrante justo en ese instante), se marca ese MISMO slot base como fallido,
+                            # para que el render muestre el fallo real en vez de "Asesor se desfirma". OJO: la
+                            # línea del fallo es continuación de un stack trace y NO trae timestamp propio — su
+                            # detección vive MÁS ABAJO, fuera del filtro de fecha (mismo patrón que ya usa
+                            # "Session_LoginAgent failed"), no aquí.
+                            if ($linea -match "(?i)LogoutAgent:session=.*?;code=ReasonCode\[10\]") {
+                                $UltimoSlotDesfirmeSolicitado = $HoraLimpia
+                                $DesfirmeEnProceso = $true
+                            }
+                            if ($linea -match "GUI Method ENDED: LogoutAgentHandler") {
+                                # El intento concluyó (haya fallado o no) — deja de "proteger" el próximo
+                                # PendingAux como residuo de desfirme; uno nuevo solo empieza con otra solicitud.
+                                $DesfirmeEnProceso = $false
+                            }
+
                             # --- Auxiliar solicitado CON LLAMADA ACTIVA: estado "PendingAux" (Punto 2, Pablo 28/08/2026) ---
                             # Independiente de la cadena elseif de abajo (igual que el contador de vacíos arriba):
                             # necesita ver TODAS las líneas relevantes, no solo la que "gane" la clasificación de esa línea.
-                            if ($linea -match "(?i)newState\s*=\s*PendingAux" -and $UltimoSlotAuxClicMs -ne "") {
+                            if ($linea -match "(?i)newState\s*=\s*PendingAux" -and $DesfirmeEnProceso) {
+                                # Este PendingAux es residuo de un intento de desfirme que Avaya aún no resuelve
+                                # (con llamada activa) — NO es un Auxiliar elegido por el asesor. No crear la fila
+                                # de "se detectó un auxiliar sin código"; se etiqueta correctamente al resolverse
+                                # más abajo (oldState=LoggedOut;newState=Aux).
+                                $PendingAuxEsResiduoDesfirme = $true
+                            }
+                            elseif ($linea -match "(?i)newState\s*=\s*PendingAux" -and $UltimoSlotAuxClicMs -ne "") {
                                 # Confirma que el clic de hace un momento (EnterAuxWithReasonCodeHandler ENDED) NO se
                                 # aplicó de inmediato — reetiquetar esa fila de "confirmado" a "pendiente".
                                 if ($EventosTiempo.ContainsKey($UltimoSlotAuxClicMs) -and $EventosTiempo[$UltimoSlotAuxClicMs].Interpretacion -match "\(Confirmado por clic\)$") {
@@ -918,19 +952,31 @@ $btnAnalizar.Add_Click({
                                     $SlotAuxDiferido = "$HoraLimpia,$MsLimpio"
                                     Init-Hora $SlotAuxDiferido
                                     if ($EventosTiempo[$SlotAuxDiferido].Interpretacion -eq "") {
-                                        $NombreDif = if ($UltimoMotivoElegidoP4 -ne "" -and $DictRC.ContainsKey($UltimoMotivoElegidoP4)) { $DictRC[$UltimoMotivoElegidoP4] } else { "" }
-                                        # Pablo (ronda siguiente): "(solicitud pendiente aplicada al colgar)" sonaba
-                                        # poco firme. Cambiado a "Auxiliar pendiente aplicado [X]" — más directo.
-                                        # OJO: el dedup del render busca este texto ("Auxiliar pendiente aplicado")
-                                        # para reconocer esta fila como hermana ms y no duplicar el evento en la
-                                        # fila de segundo compartido — si se vuelve a cambiar la redacción, actualizar
-                                        # también esa búsqueda (~línea con "se cambia a Auxiliar|se cambia a Default").
-                                        $EventosTiempo[$SlotAuxDiferido].Interpretacion      = if ($NombreDif -ne "") { "Auxiliar pendiente aplicado [$NombreDif]" } else { "Auxiliar pendiente aplicado" }
-                                        $EventosTiempo[$SlotAuxDiferido].ColorInterpretacion = [System.Drawing.Color]::Orange
-                                        $EventosTiempo[$SlotAuxDiferido].RawInterpretacion  += "[PENDINGAUX->AUX] $linea`n"
+                                        if ($PendingAuxEsResiduoDesfirme) {
+                                            # No es un Auxiliar real: es la limpieza del PendingAux que dejó un
+                                            # intento de desfirme fallido (Pablo, caso 01/09/2026) — la llamada
+                                            # activa impidió el logout, y al colgar Avaya simplemente libera al
+                                            # asesor de vuelta a Aux (no a un motivo elegido).
+                                            $EventosTiempo[$SlotAuxDiferido].Interpretacion      = "Se libera el estado — el intento de desfirme anterior no se completó (la llamada lo impidió)"
+                                            $EventosTiempo[$SlotAuxDiferido].ColorInterpretacion = [System.Drawing.Color]::LightSkyBlue
+                                            $EventosTiempo[$SlotAuxDiferido].RawInterpretacion  += "[DESFIRME-RESIDUO LIBERADO] $linea`n"
+                                        } else {
+                                            $NombreDif = if ($UltimoMotivoElegidoP4 -ne "" -and $DictRC.ContainsKey($UltimoMotivoElegidoP4)) { $DictRC[$UltimoMotivoElegidoP4] } else { "" }
+                                            # Pablo (ronda siguiente): "(solicitud pendiente aplicada al colgar)" sonaba
+                                            # poco firme. Cambiado a "Auxiliar pendiente aplicado [X]" — más directo.
+                                            # OJO: el dedup del render busca este texto ("Auxiliar pendiente aplicado",
+                                            # igual que "Se libera el estado" arriba) para reconocer esta fila como
+                                            # hermana ms y no duplicar el evento en la fila de segundo compartido — si
+                                            # se vuelve a cambiar la redacción, actualizar también esa búsqueda
+                                            # (~línea con "se cambia a Auxiliar|se cambia a Default").
+                                            $EventosTiempo[$SlotAuxDiferido].Interpretacion      = if ($NombreDif -ne "") { "Auxiliar pendiente aplicado [$NombreDif]" } else { "Auxiliar pendiente aplicado" }
+                                            $EventosTiempo[$SlotAuxDiferido].ColorInterpretacion = [System.Drawing.Color]::Orange
+                                            $EventosTiempo[$SlotAuxDiferido].RawInterpretacion  += "[PENDINGAUX->AUX] $linea`n"
+                                        }
                                     }
                                 }
                                 $UltimoPendingAuxLogoutSlot = ""   # consumida, no reusar en próximas líneas
+                                $PendingAuxEsResiduoDesfirme = $false   # consumido, resetear para el próximo PendingAux normal
                             }
 
                             # --- Caso "logeo autónomo": señales de PASO 4 (captura, se emiten en barrido post-PASO5) ---
@@ -1901,6 +1947,15 @@ $btnAnalizar.Add_Click({
                             # que $MsLimpio ya conserva (solo se actualiza en líneas con timestamp). Se antepone
                             # "[HH:mm:ss,fff]" para que el extractor de ms del render lo encuentre y el tooltip lo muestre.
                             $EventosTiempo[$HoraLimpia].RawAux += "[$HoraLimpia,$MsLimpio] $linea`n"
+                        }
+                        # Mismo patrón que "Session_LoginAgent failed" arriba, para el intento de DESFIRME:
+                        # "Session_LogoutAgent failed...Logout Agent failed - Call not disconnected" es otra
+                        # línea de continuación de stack trace sin timestamp propio — se marca el slot BASE
+                        # donde se pidió el logout ($UltimoSlotDesfirmeSolicitado) como fallido, para que el
+                        # render muestre el fallo real en vez de "Asesor se desfirma" (Pablo, caso 01/09/2026).
+                        if ($HoraLimpia -ne "" -and $linea -match "(?i)Session_LogoutAgent failed|Logout Agent failed" -and $UltimoSlotDesfirmeSolicitado -ne "" -and $EventosTiempo.ContainsKey($UltimoSlotDesfirmeSolicitado)) {
+                            $EventosTiempo[$UltimoSlotDesfirmeSolicitado].Aux    += "DESFIRME_FALLIDO|"
+                            $EventosTiempo[$UltimoSlotDesfirmeSolicitado].RawAux += "[$HoraLimpia,$MsLimpio] $linea`n"
                         }
                         if ($linea -match "(?i)Call ended.*?Id=(\d+)") { $ConexionesYaIniciadas.Remove($matches[1]) | Out-Null }
 
@@ -4328,9 +4383,21 @@ $btnAnalizar.Add_Click({
                     if ($Obj.Interpretacion -eq "" -and $H -notmatch ',' -and
                         ($Obj.Aux -match "GUI_AUX_CONFIRMADO|NUEVO_RC:|RC: " -or $Obj.RawAux -match "(?i)AgentStateChanged.*newState=Aux") -and
                         $Obj.Agente -eq "" -and $Obj.Audio -eq "" -and $Obj.Ispeac -eq "" -and $Obj.SysLog -eq "" -and $Obj.AppLog -eq "") {
-                        $HaySibAux = $false
+                        $HaySibAux = $false; $SibEsResiduoDesfirme = $false
                         foreach ($kSib in $EventosTiempo.Keys) {
-                            if ($kSib -match ("^" + [regex]::Escape($H) + ",\d+$") -and $EventosTiempo[$kSib].Interpretacion -match "se cambia a Auxiliar|se cambia a Default|Auxiliar pendiente aplicado") { $HaySibAux = $true; break }
+                            if ($kSib -match ("^" + [regex]::Escape($H) + ",\d+$") -and $EventosTiempo[$kSib].Interpretacion -match "se cambia a Auxiliar|se cambia a Default|Auxiliar pendiente aplicado|Se libera el estado") {
+                                $HaySibAux = $true
+                                if ($EventosTiempo[$kSib].Interpretacion -match "Se libera el estado") { $SibEsResiduoDesfirme = $true }
+                                break
+                            }
+                        }
+                        if ($HaySibAux -and $SibEsResiduoDesfirme) {
+                            # Residuo de un intento de desfirme fallido (Pablo, 01/09/2026): NO es un motivo real
+                            # elegido por el asesor — no hay que inferir/heredar $UltimoMotivoElegido aquí, solo
+                            # reflejar que quedó en Auxiliar sin motivo confirmado.
+                            $CurrentAux = "$symUser Estado: AUXILIAR"; $CurrentColor = [System.Drawing.Color]::LightCoral
+                            $EsperandoDefaultPostLogin = $false; $EnDefaultPostLogin = $false
+                            continue
                         }
                         if ($HaySibAux) {
                             $CodigoRCDed = ""
@@ -4457,7 +4524,20 @@ $btnAnalizar.Add_Click({
                     elseif ($Obj.Agente -match "x MUTE MANUAL") { $Interp = "Mute activado"; $ColorInterp = [System.Drawing.Color]::Yellow }
                     elseif ($Obj.Agente -match "o UNMUTE MANUAL") { $Interp = "Mute desactivado"; $ColorInterp = [System.Drawing.Color]::Yellow }
                     elseif ($Obj.AppLog -match "APP CRASH") { $Interp = "Aplicación congelada o cerrada inesperadamente"; $ColorInterp = [System.Drawing.Color]::Orange }
-                    elseif ($Obj.Aux -match "SISTEMA_LOGOUT") { if ($Interp -notmatch "FIN DE LLAMADA|CUELGUE MANUAL|EVASIÓN") { $Interp = "Asesor se desfirma"; $ColorInterp = [System.Drawing.Color]::LightSkyBlue }; $RecienFirmado = $false; $LoginYaConfirmado = $false; $EsperandoDefaultPostLogin = $false; $EnDefaultPostLogin = $false; $UltimoMotivoElegido = "" }
+                    elseif ($Obj.Aux -match "SISTEMA_LOGOUT") {
+                        if ($Interp -notmatch "FIN DE LLAMADA|CUELGUE MANUAL|EVASIÓN") {
+                            if ($Obj.Aux -match "DESFIRME_FALLIDO") {
+                                # El intento de desfirme NO se completó — Avaya lo rechazó (típicamente porque
+                                # justo entraba/seguía activa una llamada: "Call not disconnected"). El asesor
+                                # sigue firmado; no reportar "Asesor se desfirma" como si de verdad hubiera pasado
+                                # (Pablo, caso 01/09/2026 — coincidencia con una llamada entrante).
+                                $Interp = "⚠ Intento de desfirme — FALLÓ (no se pudo desconectar la llamada)"; $ColorInterp = [System.Drawing.Color]::OrangeRed
+                            } else {
+                                $Interp = "Asesor se desfirma"; $ColorInterp = [System.Drawing.Color]::LightSkyBlue
+                            }
+                        }
+                        $RecienFirmado = $false; $LoginYaConfirmado = $false; $EsperandoDefaultPostLogin = $false; $EnDefaultPostLogin = $false; $UltimoMotivoElegido = ""
+                    }
                     elseif ($Interp -match "INICIO DE LLAMADA" -and $Obj.Tel -match "^565$") { $Interp = "Asesor solicita desfirmarse"; $ColorInterp = [System.Drawing.Color]::IndianRed }
                     elseif ($Interp -match "FIN DE LLAMADA NORMAL" -and $Obj.Tel -match "^565$") { $Interp = "Asesor desfirmado"; $ColorInterp = [System.Drawing.Color]::SkyBlue }
                     elseif ($Obj.RawAux -match "Session_LoginAgent failed") {
@@ -4724,7 +4804,7 @@ $btnAnalizar.Add_Click({
                     #   · "Extensión en línea…" y "Usuario intentando firmarse…" → RawInterpretacion
                     # El regex acepta ':' (Endpoint/Audio: 16:10:06:409) y ',' (OneXAgent: 16:10:32,123).
                     $HoraCell = $H
-                    if ($H -notmatch ',' -and $Interp -match "se cambia a Auxiliar|se cambia a Disponible|Asesor firmado y en Default|Asesor se desfirma|Usuario firmado exitosamente|Extensión en línea|Usuario intentando firmarse|Fallo en el intento de firmarse") {
+                    if ($H -notmatch ',' -and $Interp -match "se cambia a Auxiliar|se cambia a Disponible|Asesor firmado y en Default|Asesor se desfirma|Intento de desfirme|Usuario firmado exitosamente|Extensión en línea|Usuario intentando firmarse|Fallo en el intento de firmarse") {
                         $_reMs = [regex]::Escape($H) + "[.,:](\d{1,3})"
                         if     ($Obj.RawAux            -match $_reMs) { $HoraCell = "$H," + ($matches[1].PadRight(3,'0')) }
                         elseif ($Obj.RawInterpretacion -match $_reMs) { $HoraCell = "$H," + ($matches[1].PadRight(3,'0')) }
