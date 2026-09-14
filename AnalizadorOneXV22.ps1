@@ -453,6 +453,7 @@ $btnAnalizar.Add_Click({
     $UltimoMotivoElegidoP4 = ""
     $UltimoPendingAuxLogoutSlot = ""
     $UltimoSlotAuxClicMs = ""   # slot ms del último "Asesor se cambia a Auxiliar... (Confirmado por clic)" — por si hay que reetiquetarlo a "pendiente"
+    $UltimoSlotAuxClicAbsMs = -1  # ms absolutos de ese slot (Pablo, 09/09/2026) — ventana de 3s para no reetiquetar un clic viejo con un PendingAux de otro intento completamente distinto minutos después
     # --- Intento de desfirme (LogoutAgentHandler) que puede FALLAR ---
     # Si al pedir el logout hay una llamada activa/entrante justo en ese instante, Avaya puede rechazarlo
     # ("Session_LogoutAgent failed...Call not disconnected") y el asesor queda pegado en un PendingAux
@@ -467,6 +468,10 @@ $btnAnalizar.Add_Click({
     # que pudiera dispararse. $DesfirmeEnProceso sigue protegiendo solo el PendingAux (Ronda 1); esta
     # bandera vive un poco más: desde la solicitud hasta la confirmación real o el fallo.
     $DesfirmeEsperandoConfirmacion = $false
+    $MecanismoDesfirmeActual = ""        # distintivo (Pablo, 09/09/2026): CUÁL de los 3 mecanismos originó el intento en curso — se
+                                          # fija en cada uno de los 3 disparadores y se lee en el intento/confirmación/fallo/residuo
+                                          # para que las 4 filas del flujo de desfirme digan "(botón superior izquierdo)" /
+                                          # "(marcado manual 565)" / "(botón favorito "Desfirmarse")" según corresponda.
     # --- Mecanismo 2 de desfirme: marcado manual "565"+dígito (ej. "565"+"3"), Pablo 09/09/2026 ---
     # No deja ninguna línea de "intento" limpia (ver hallazgo abajo) — se rastrea viendo cuándo una
     # llamada saliente marca EXACTO "565" y luego se extiende con un dígito más en esa MISMA llamada.
@@ -492,6 +497,11 @@ $btnAnalizar.Add_Click({
     # TODA ocurrencia y el barrido COLAPSA cada lista por episodios (por hueco de tiempo) → una fila por
     # episodio. Antes se guardaba solo el PRIMER slot → el segundo cierre se perdía. Cada elemento: @{Slot;Raw}.
     $CierreAppList      = @()        # cierres de app (Shutdown()/ExitHandler/PhoneService shutdown) — PASO 4
+    $ReinicioWindowsList = @()       # reinicios/apagados de Windows (IDs 41/1074/6008/1001, Visor de Eventos) — solo
+                                      # modo remoto (ver bloque "WINDOWS EVENT LOG" más abajo). Pablo, 14/09/2026: un
+                                      # DESFIRME MANUAL pegado a uno de estos NO es decisión del asesor — es Windows
+                                      # matando la app a mitad de un reinicio/apagado forzado. Cada elemento: @{Slot;
+                                      # Id; Desc; Raw} — Desc ya trae el texto específico del tipo de evento.
     $DesfirmeFallidoList = @()       # intentos de desfirme fallidos ("Session_LogoutAgent failed") — PASO 4; la fila
                                       # real se arma DESPUÉS de PASO 5 (ver barrido pre-PASO 6) porque el ms heredado
                                       # puede coincidir con un FIN DE LLAMADA de otra sesión que PASO 5 aún no ha
@@ -605,7 +615,21 @@ $btnAnalizar.Add_Click({
                     $Desc = ""; $Omitir = $false
                     switch ($Ev.Id) {
                         41    { $Desc = "K-Power (Apagado Sucio/Corte energía)" }
-                        1074  { $Desc = "Reinicio provocado por Usuario" }
+                        1074  {
+                            # Pablo, 14/09/2026 (caso CCS2124-BCO, 3 usuarios/3 días distintos con la MISMA firma):
+                            # el ID 1074 SIEMPRE dice "reinicio", pero el proceso que lo pide (param1 del evento,
+                            # dentro de $Ev.Message) SÍ distingue el origen real. "winlogon.exe" iniciando el
+                            # reinicio (a menudo a nombre de NT AUTHORITY\SYSTEM, no de la persona) es la firma de
+                            # un reinicio FORZADO por el propio sistema (recuperación tras cuelgue, watchdog, etc.),
+                            # NO de alguien dando clic en "Reiniciar" — eso lo inicia explorer.exe o
+                            # StartMenuExperienceHost.exe (el menú de Inicio). Sin distinguirlos, el texto
+                            # "provocado por Usuario" resultaba engañoso para el caso forzado.
+                            if ($Ev.Message -match "(?i)winlogon\.exe") {
+                                $Desc = "Reinicio FORZADO por el sistema (NO fue el usuario — lo inició winlogon.exe)"
+                            } else {
+                                $Desc = "Reinicio provocado por el Usuario (Inicio > Reiniciar)"
+                            }
+                        }
                         6008  { $Desc = "Cierre Inesperado Previo" }
                         1001  { $Desc = "PANTALLAZO AZUL (BSOD BugCheck)" }
                         129   { if ($Ev.ProviderName -match "(?i)storahci|iaStor|disk|VDS") { $Desc = "Disco Duro: Reset Port (Lentitud)" } else { $Omitir = $true } }
@@ -616,7 +640,13 @@ $btnAnalizar.Add_Click({
                     }
                     if ($Omitir) { continue }
                     $EventosTiempo[$HoraLimpia].SysLog = $Desc; $EventosTiempo[$HoraLimpia].ColorSys = [System.Drawing.Color]::Red
-                    $EventosTiempo[$HoraLimpia].Tel = "WINDOWS SYS"; $EventosTiempo[$HoraLimpia].RawSysLog += "[$HoraLimpia] ID $($Ev.Id): $($Ev.Message)`n"
+                    $RawEvSys = "[$HoraLimpia] ID $($Ev.Id): $($Ev.Message)"
+                    $EventosTiempo[$HoraLimpia].Tel = "WINDOWS SYS"; $EventosTiempo[$HoraLimpia].RawSysLog += "$RawEvSys`n"
+                    # Reinicios/apagados abruptos (no las alertas de disco/RAM/red) — candidatos para explicar un
+                    # DESFIRME MANUAL cercano como consecuencia, no como decisión del asesor (ver barrido PASO 6).
+                    if ($Ev.Id -in 41,1074,6008,1001) {
+                        $ReinicioWindowsList += [pscustomobject]@{ Slot = $HoraLimpia; Id = $Ev.Id; Desc = $Desc; Raw = $RawEvSys }
+                    }
                 }
             }
         } catch {}
@@ -916,6 +946,7 @@ $btnAnalizar.Add_Click({
                                 $DesfirmeEnProceso = $true
                                 $DesfirmeYaConfirmado = $false
                                 $DesfirmeEsperandoConfirmacion = $true
+                                $MecanismoDesfirmeActual = 'botón superior izquierdo'
                                 $CandidatoSlot565 = ""   # descarta cualquier candidato pendiente del mecanismo 2 (Ronda siguiente)
                                 # Fila propia con ms (Pablo, caso 08/09/2026): el mecanismo interno de logout
                                 # también dispara una llamada "fantasma" a la extensión 565 (ver Ronda 3) — si
@@ -927,7 +958,7 @@ $btnAnalizar.Add_Click({
                                 $SlotDesfirmeSolicitud = "$HoraLimpia,$MsLimpio"
                                 Init-Hora $SlotDesfirmeSolicitud
                                 if ($EventosTiempo[$SlotDesfirmeSolicitud].Interpretacion -eq "") {
-                                    $EventosTiempo[$SlotDesfirmeSolicitud].Interpretacion      = "Asesor tratando de desfirmarse"
+                                    $EventosTiempo[$SlotDesfirmeSolicitud].Interpretacion      = "Asesor tratando de desfirmarse ($MecanismoDesfirmeActual)"
                                     $EventosTiempo[$SlotDesfirmeSolicitud].ColorInterpretacion = [System.Drawing.Color]::LightSkyBlue
                                     $EventosTiempo[$SlotDesfirmeSolicitud].RawInterpretacion  += "$linea`n"
                                 }
@@ -944,11 +975,12 @@ $btnAnalizar.Add_Click({
                                 $DesfirmeEnProceso = $true
                                 $DesfirmeYaConfirmado = $false
                                 $DesfirmeEsperandoConfirmacion = $true
+                                $MecanismoDesfirmeActual = 'botón favorito "Desfirmarse"'
                                 $CandidatoSlot565 = ""   # descarta cualquier candidato pendiente del mecanismo 2 (Ronda siguiente)
                                 $SlotDesfirmeSolicitud = "$HoraLimpia,$MsLimpio"
                                 Init-Hora $SlotDesfirmeSolicitud
                                 if ($EventosTiempo[$SlotDesfirmeSolicitud].Interpretacion -eq "") {
-                                    $EventosTiempo[$SlotDesfirmeSolicitud].Interpretacion      = "Asesor tratando de desfirmarse"
+                                    $EventosTiempo[$SlotDesfirmeSolicitud].Interpretacion      = "Asesor tratando de desfirmarse ($MecanismoDesfirmeActual)"
                                     $EventosTiempo[$SlotDesfirmeSolicitud].ColorInterpretacion = [System.Drawing.Color]::LightSkyBlue
                                     $EventosTiempo[$SlotDesfirmeSolicitud].RawInterpretacion  += "$linea`n"
                                 }
@@ -974,7 +1006,7 @@ $btnAnalizar.Add_Click({
                                 $SlotDesfirmeConfirmado = "$HoraLimpia,$MsLimpio"
                                 Init-Hora $SlotDesfirmeConfirmado
                                 if ($EventosTiempo[$SlotDesfirmeConfirmado].Interpretacion -eq "") {
-                                    $EventosTiempo[$SlotDesfirmeConfirmado].Interpretacion      = "Asesor ya se encuentra desfirmado"
+                                    $EventosTiempo[$SlotDesfirmeConfirmado].Interpretacion      = "Asesor ya se encuentra desfirmado ($MecanismoDesfirmeActual)"
                                     $EventosTiempo[$SlotDesfirmeConfirmado].ColorInterpretacion = [System.Drawing.Color]::LightSkyBlue
                                     $EventosTiempo[$SlotDesfirmeConfirmado].RawInterpretacion  += "[DESFIRME CONFIRMADO] $linea`n"
                                 }
@@ -1012,16 +1044,17 @@ $btnAnalizar.Add_Click({
                             if ($linea -match "(?i)oldState\s*=\s*\w+\s*;\s*newState\s*=\s*LoggedOut" -and -not $DesfirmeEsperandoConfirmacion -and $CandidatoSlot565 -ne "") {
                                 $MsAhora565 = & $MsDeSlot "$HoraLimpia,$MsLimpio"
                                 if ($CandidatoMs565 -ge 0 -and $MsAhora565 -ge 0 -and ($MsAhora565 - $CandidatoMs565) -ge 0 -and ($MsAhora565 - $CandidatoMs565) -le 10000) {
+                                    $MecanismoDesfirmeActual = 'marcado manual 565'
                                     Init-Hora $CandidatoSlot565
                                     if ($EventosTiempo[$CandidatoSlot565].Interpretacion -eq "") {
-                                        $EventosTiempo[$CandidatoSlot565].Interpretacion      = "Asesor tratando de desfirmarse"
+                                        $EventosTiempo[$CandidatoSlot565].Interpretacion      = "Asesor tratando de desfirmarse ($MecanismoDesfirmeActual)"
                                         $EventosTiempo[$CandidatoSlot565].ColorInterpretacion = [System.Drawing.Color]::LightSkyBlue
                                         $EventosTiempo[$CandidatoSlot565].RawInterpretacion  += "$CandidatoLinea565`n"
                                     }
                                     $SlotConfirm565 = "$HoraLimpia,$MsLimpio"
                                     Init-Hora $SlotConfirm565
                                     if ($EventosTiempo[$SlotConfirm565].Interpretacion -eq "") {
-                                        $EventosTiempo[$SlotConfirm565].Interpretacion      = "Asesor ya se encuentra desfirmado"
+                                        $EventosTiempo[$SlotConfirm565].Interpretacion      = "Asesor ya se encuentra desfirmado ($MecanismoDesfirmeActual)"
                                         $EventosTiempo[$SlotConfirm565].ColorInterpretacion = [System.Drawing.Color]::LightSkyBlue
                                         $EventosTiempo[$SlotConfirm565].RawInterpretacion  += "[DESFIRME CONFIRMADO] $linea`n"
                                     }
@@ -1039,9 +1072,13 @@ $btnAnalizar.Add_Click({
                                 # más abajo (oldState=LoggedOut;newState=Aux).
                                 $PendingAuxEsResiduoDesfirme = $true
                             }
-                            elseif ($linea -match "(?i)newState\s*=\s*PendingAux" -and $UltimoSlotAuxClicMs -ne "") {
+                            elseif ($linea -match "(?i)newState\s*=\s*PendingAux" -and $UltimoSlotAuxClicMs -ne "" -and ((& $MsDeSlot "$HoraLimpia,$MsLimpio") - $UltimoSlotAuxClicAbsMs) -ge 0 -and ((& $MsDeSlot "$HoraLimpia,$MsLimpio") - $UltimoSlotAuxClicAbsMs) -le 3000) {
                                 # Confirma que el clic de hace un momento (EnterAuxWithReasonCodeHandler ENDED) NO se
-                                # aplicó de inmediato — reetiquetar esa fila de "confirmado" a "pendiente".
+                                # aplicó de inmediato — reetiquetar esa fila de "confirmado" a "pendiente". Ventana de
+                                # 3s (Pablo, 09/09/2026, caso "recibida en AUXILIAR" falso): sin esto, un PendingAux
+                                # de un intento de Auxiliar COMPLETAMENTE DISTINTO, minutos después (mientras el
+                                # asesor ya estaba en Disponible), reetiquetaba retroactivamente el clic viejo — que
+                                # sí se había confirmado de inmediato, sin quedar pendiente nunca.
                                 if ($EventosTiempo.ContainsKey($UltimoSlotAuxClicMs) -and $EventosTiempo[$UltimoSlotAuxClicMs].Interpretacion -match "\(Confirmado por clic\)$") {
                                     $EventosTiempo[$UltimoSlotAuxClicMs].Interpretacion = $EventosTiempo[$UltimoSlotAuxClicMs].Interpretacion -replace "\(Confirmado por clic\)$", "(clic registrado — pendiente, la llamada seguía activa)"
                                     $EventosTiempo[$UltimoSlotAuxClicMs].RawInterpretacion += "[PENDINGAUX] $linea`n"
@@ -1084,7 +1121,7 @@ $btnAnalizar.Add_Click({
                                             # intento de desfirme fallido (Pablo, caso 01/09/2026) — la llamada
                                             # activa impidió el logout, y al colgar Avaya simplemente libera al
                                             # asesor de vuelta a Aux (no a un motivo elegido).
-                                            $EventosTiempo[$SlotAuxDiferido].Interpretacion      = "Se libera el estado — el intento de desfirme anterior no se completó (la llamada lo impidió)"
+                                            $EventosTiempo[$SlotAuxDiferido].Interpretacion      = "Se libera el estado — el intento de desfirme anterior no se completó (la llamada lo impidió) ($MecanismoDesfirmeActual)"
                                             $EventosTiempo[$SlotAuxDiferido].ColorInterpretacion = [System.Drawing.Color]::LightSkyBlue
                                             $EventosTiempo[$SlotAuxDiferido].RawInterpretacion  += "[DESFIRME-RESIDUO LIBERADO] $linea`n"
                                         } else {
@@ -1249,6 +1286,7 @@ $btnAnalizar.Add_Click({
                                         # reetiquetarla de "(Confirmado por clic)" a "(clic registrado — pendiente,
                                         # la llamada seguía activa)" si de verdad resulta ser el caso.
                                         $UltimoSlotAuxClicMs = $SlotAuxConMotivo
+                                        $UltimoSlotAuxClicAbsMs = & $MsDeSlot $SlotAuxConMotivo
                                     }
                                     # Cerrar la ventana siempre (con o sin código encontrado) para no arrastrarla a
                                     # un próximo EnterAux suelto que no venga de este clic.
@@ -2095,7 +2133,7 @@ $btnAnalizar.Add_Click({
                             # más tarde (caso real de Pablo, 09/09/2026). Se guarda en $DesfirmeFallidoList y la
                             # fila se arma en el barrido justo antes de PASO 6, cuando PASO 4 Y PASO 5 ya
                             # terminaron de escribir todo — ahí "libre" sí significa libre de verdad.
-                            $DesfirmeFallidoList += [pscustomobject]@{ Hora = $HoraLimpia; Ms = $MsLimpio; Raw = $linea }
+                            $DesfirmeFallidoList += [pscustomobject]@{ Hora = $HoraLimpia; Ms = $MsLimpio; Raw = $linea; Mecanismo = $MecanismoDesfirmeActual }
                             # Ya se sabe que este intento falló — no esperar más una confirmación real que nunca
                             # va a llegar (el residuo de PendingAux, minutos después, NO cuenta como logout).
                             $DesfirmeEsperandoConfirmacion = $false
@@ -3307,17 +3345,18 @@ $btnAnalizar.Add_Click({
 
             # RENEGOCIACIÓN DE MEDIOS: un "cerrado → abierto" en la MISMA línea con <1 s de diferencia no
             # es una acción del asesor: es Avaya cortando y reabriendo el canal H.245 (StopMedia + fast-start
-            # OLC), típicamente al conectar con el destino. Se colapsan las dos filas en un solo evento claro.
-            # (Un cerrado línea 1 → abierto línea 2 es un cambio de línea real y NO se colapsa.)
+            # OLC), típicamente al conectar con el destino. No aporta nada a la interpretación del flujo de
+            # la llamada (Pablo, 11/09/2026) — se descartan AMBAS filas en vez de mostrar una fila propia
+            # ("↻ Avaya renegoció el audio..."): si el slot queda sin ningún otro campo poblado, el filtro de
+            # filas vacías del render ya las oculta solo (no hace falta nada más aquí).
+            # (Un cerrado línea 1 → abierto línea 2 es un cambio de línea real y NO se descarta.)
             for ($iAu = 0; $iAu -lt ($AudioRows.Count - 1); $iAu++) {
                 $aC = $AudioRows[$iAu]; $aA = $AudioRows[$iAu + 1]
                 $gap = $aA.Ms - $aC.Ms
                 if ($aC.Tipo -eq "C" -and $aA.Tipo -eq "A" -and $aC.Linea -ge 1 -and $aC.Linea -eq $aA.Linea -and
                     $aC.Ms -ge 0 -and $gap -ge 0 -and $gap -le 1000) {
                     $oC = $EventosTiempo[$aC.Slot]; $oA = $EventosTiempo[$aA.Slot]
-                    $oC.Audio      = "↻ Avaya renegoció el audio (línea $($aC.Linea))"
-                    $oC.ColorAudio = [System.Drawing.Color]::DeepSkyBlue
-                    $oC.RawAudio  += $oA.RawAudio
+                    $oC.Audio      = ""; $oC.ColorAudio = [System.Drawing.Color]::White
                     $oA.Audio      = ""; $oA.ColorAudio = [System.Drawing.Color]::White
                     $iAu++   # el par ya se consumió
                 }
@@ -3427,20 +3466,43 @@ $btnAnalizar.Add_Click({
             $GAP_CIERRE = 30000   # 30 s: separa cierres/desfirmes distintos (las señales internas de un cierre caen juntas)
             $GAP_RED    = 90000   # 90 s: un episodio de caída/recuperación dura minutos con huecos ~19 s → un solo episodio
             $cierreMsAll = @(@($CierreAppList) | ForEach-Object { & $MsDeSlot $_.Slot })
+            # Reinicios/apagados de Windows (Pablo, 14/09/2026 — casos CCS2244SOCINV 10/09 y CCS2124-BCO 13/09):
+            # cada elemento trae su Ms YA calculado junto con el registro completo (Desc/Raw), para poder citar el
+            # tipo de evento exacto y su hora exacta en el mensaje, no solo saber que "hubo algo cerca".
+            $reinicioMsAll = @(@($ReinicioWindowsList) | ForEach-Object { [pscustomobject]@{ Ms = (& $MsDeSlot $_.Slot); Item = $_ } })
 
-            # 1) Desfirme manual — SOLO si NO va pegado a un cierre de app (±15 s). Si hay cierre cerca, el
-            #    desfirme es parte del cierre (la fila de CIERRE ya lo cuenta) → no se duplica. Un desfirme
-            #    "solo" (el asesor se desfirma pero deja la app abierta) SÍ se muestra.
+            # 1) Desfirme manual — SOLO si NO va pegado a un cierre de app NI a un reinicio/apagado de Windows
+            #    (±15 s). Si hay un cierre de app cerca, el desfirme es parte de ESE cierre (la fila de CIERRE ya
+            #    lo cuenta) → no se duplica. Si hay un reinicio/apagado de Windows cerca, el desfirme NO fue una
+            #    decisión del asesor — es Avaya cerrando sesión porque Windows mató la app a mitad de un reinicio
+            #    forzado (caso real: llamada se queda "cargando" 18s → Windows reinicia → OneX se cierra de golpe).
+            #    Se relabela citando el evento y AMBAS horas (la del desfirme y la del reinicio) para que quede
+            #    inequívoco qué pasó y cuándo — nunca se queda como "DESFIRME MANUAL" ambiguo en ese caso. Un
+            #    desfirme "solo" (sin cierre de app NI reinicio cerca — el asesor de verdad cerró sesión y dejó la
+            #    app abierta) SÍ se muestra igual que antes.
             foreach ($ep in (& $ColapsarEpisodios $DesfirmeManualList $GAP_CIERRE)) {
                 $dm = & $MsDeSlot $ep.Slot
                 $pegadoCierre = $false
                 foreach ($cm in $cierreMsAll) { if ($cm -ge 0 -and [math]::Abs($cm - $dm) -le 15000) { $pegadoCierre = $true; break } }
                 if ($pegadoCierre) { continue }
+                $reinicioCercano = $null; $distReinicio = 1e18
+                foreach ($rw in $reinicioMsAll) {
+                    if ($rw.Ms -ge 0) {
+                        $dist = [math]::Abs($rw.Ms - $dm)
+                        if ($dist -le 15000 -and $dist -lt $distReinicio) { $reinicioCercano = $rw.Item; $distReinicio = $dist }
+                    }
+                }
                 Init-Hora $ep.Slot
                 if ($EventosTiempo[$ep.Slot].SysLog -eq "") {
-                    $EventosTiempo[$ep.Slot].SysLog   = "✔ DESFIRME MANUAL: el asesor cerró sesión (dejó la app abierta)"
-                    $EventosTiempo[$ep.Slot].ColorSys = [System.Drawing.Color]::LightGreen
-                    $EventosTiempo[$ep.Slot].RawSysLog += "¿Por qué? Se cerró sesión con desfirme manual (requestor='manual') sin cerrar la aplicación:`n$($ep.Raw)`n"
+                    if ($null -ne $reinicioCercano) {
+                        $EventosTiempo[$ep.Slot].SysLog   = "⚠ DESFIRME AUTOMÁTICO (consecuencia de un reinicio/apagado, NO un 'Cerrar sesión' desde OneX) — causado por: $($reinicioCercano.Desc)"
+                        $EventosTiempo[$ep.Slot].ColorSys = [System.Drawing.Color]::OrangeRed
+                        $EventosTiempo[$ep.Slot].RawSysLog += "¿Por qué? OneX cerró sesión solo (requestor='manual') a las $($ep.Slot) — no es un 'Cerrar sesión' elegido desde el menú de OneX, sino consecuencia de que Windows registró '$($reinicioCercano.Desc)' a las $($reinicioCercano.Slot) (diferencia: $([math]::Round($distReinicio/1000,1))s). El reinicio/apagado del equipo interrumpió la app a mitad del cierre.`n--- Evidencia del desfirme (AvayaOneXLog, $($ep.Slot)) ---`n$($ep.Raw)`n--- Evidencia del evento de Windows (Visor de Eventos, $($reinicioCercano.Slot)) ---`n$($reinicioCercano.Raw)`n"
+                    } else {
+                        $EventosTiempo[$ep.Slot].SysLog   = "✔ DESFIRME MANUAL: el asesor cerró sesión (dejó la app abierta)"
+                        $EventosTiempo[$ep.Slot].ColorSys = [System.Drawing.Color]::LightGreen
+                        $EventosTiempo[$ep.Slot].RawSysLog += "¿Por qué? Se cerró sesión con desfirme manual (requestor='manual') sin cerrar la aplicación:`n$($ep.Raw)`n"
+                    }
                     if ($EventosTiempo[$ep.Slot].Tel -eq "-") { $EventosTiempo[$ep.Slot].Tel = "RED/AVAYA" }
                 }
             }
@@ -4299,7 +4361,7 @@ $btnAnalizar.Add_Click({
             # --- PLEGAR AUDIO ABIERTO/CERRADO EN LA FILA QUE LO PROVOCÓ (mismo segundo) ---
             # "Audio abierto/cerrado" cae en el MISMO segundo que el evento que lo causó (abrir línea / fin
             # de llamada). En vez de una fila propia que solo puebla la columna Audio, se mete en la fila de
-            # ese evento. La renegociación de medios NO se pliega (es un evento propio significativo).
+            # ese evento. (La renegociación de medios ya se descarta antes de llegar aquí — ver arriba.)
             $AbreReAu   = "INICIO DE LLAMADA|Marcando/Timbrando|Contestaron|INICIO DE SESIÓN|LÍNEA ABIERTA|Abrió .*sin marcar|señal de llamada"
             $CierraReAu = "FIN DE LLAMADA|CUELGUE MANUAL|Cerró línea|CLIENTE COLGÓ|EVASIÓN"
             foreach ($kAudF in @($EventosTiempo.Keys)) {
@@ -4307,7 +4369,6 @@ $btnAnalizar.Add_Click({
                 $oAudF = $EventosTiempo[$kAudF]
                 if ($null -eq $oAudF -or $oAudF -isnot [hashtable]) { continue }
                 if ($oAudF.Audio -notmatch "Audio abierto|Audio cerrado") { continue }
-                if ($oAudF.Audio -match "renegoci") { continue }
                 # Si esta misma fila ya trae una interpretación, no es una fila de solo-audio → no tocar.
                 if ($oAudF.Interpretacion -ne "") { continue }
                 $esAbreAu = ($oAudF.Audio -match "Audio abierto")
@@ -4390,7 +4451,7 @@ $btnAnalizar.Add_Click({
                 }
                 Init-Hora $SlotDesfirmeFallo
                 if ($EventosTiempo[$SlotDesfirmeFallo].Interpretacion -eq "") {
-                    $EventosTiempo[$SlotDesfirmeFallo].Interpretacion      = "⚠ Intento de desfirme — FALLÓ (no se pudo desconectar la llamada)"
+                    $EventosTiempo[$SlotDesfirmeFallo].Interpretacion      = "⚠ Intento de desfirme — FALLÓ (no se pudo desconectar la llamada) ($($df.Mecanismo))"
                     $EventosTiempo[$SlotDesfirmeFallo].ColorInterpretacion = [System.Drawing.Color]::OrangeRed
                     $EventosTiempo[$SlotDesfirmeFallo].RawInterpretacion  += "[DESFIRME FALLIDO] $($df.Raw)`n"
                 }
