@@ -472,6 +472,12 @@ $btnAnalizar.Add_Click({
                                           # fija en cada uno de los 3 disparadores y se lee en el intento/confirmación/fallo/residuo
                                           # para que las 4 filas del flujo de desfirme digan "(botón superior izquierdo)" /
                                           # "(marcado manual 565)" / "(botón favorito "Desfirmarse")" según corresponda.
+    $UltimoInvokeAbrvDialMs = -1          # ms del último "Begin Executing method Invoke(fnu=abrv-dial...)" (Pablo, 14/09/2026):
+                                          # ES el clic real de CUALQUIER botón favorito tipo abreviado. Se exige cerca de
+                                          # "Feature : DESFIRMARSE" para no confundirlo con el ruido de ASTFeaturesListEvent
+                                          # (el refresco periódico de la lista de favoritos, que también dispara esa línea
+                                          # sin que el asesor haya tocado nada — caso real: log 172.18.224.150 14/09, el
+                                          # asesor jamás dio clic y aun así apareció "Feature : DESFIRMARSE" solo).
     # --- Mecanismo 2 de desfirme: marcado manual "565"+dígito (ej. "565"+"3"), Pablo 09/09/2026 ---
     # No deja ninguna línea de "intento" limpia (ver hallazgo abajo) — se rastrea viendo cuándo una
     # llamada saliente marca EXACTO "565" y luego se extiende con un dígito más en esa MISMA llamada.
@@ -502,6 +508,13 @@ $btnAnalizar.Add_Click({
                                       # DESFIRME MANUAL pegado a uno de estos NO es decisión del asesor — es Windows
                                       # matando la app a mitad de un reinicio/apagado forzado. Cada elemento: @{Slot;
                                       # Id; Desc; Raw} — Desc ya trae el texto específico del tipo de evento.
+    # --- Cierre FORZADO de la aplicación (Pablo, 14/09/2026, caso transferencia sin destino → excepción sin
+    # manejar → la app cae y vuelve a arrancar sola) --- "INFO OneXAgentUI.App Starting one-XAgent" es la firma
+    # inequívoca de un arranque de proceso NUEVO (recarga toda su configuración, reinicia SparkEmulator.exe) — la
+    # emite CUALQUIER arranque, sea el primer login del día o una recuperación tras un crash. Se distingue
+    # comparando contra el último "pulso" (última línea con timestamp vista) y $CierreAppList: si NO hubo un
+    # cierre normal (ExitHandler/Shutdown()) entre esa última actividad y este arranque, la app se cayó sola.
+    $UltimaActividadAbsMs = -1; $UltimaActividadSlot = ""; $UltimaActividadRaw = ""
     $DesfirmeFallidoList = @()       # intentos de desfirme fallidos ("Session_LogoutAgent failed") — PASO 4; la fila
                                       # real se arma DESPUÉS de PASO 5 (ver barrido pre-PASO 6) porque el ms heredado
                                       # puede coincidir con un FIN DE LLAMADA de otra sesión que PASO 5 aún no ha
@@ -931,6 +944,35 @@ $btnAnalizar.Add_Click({
                             # no relevante para el timeline — el punto es medir el "pulso" real del proceso.
                             if ($HoraLimpia -match '^(\d{2}):(\d{2}):(\d{2})$') { $Script:TsProceso.Add(([int64]$matches[1])*3600000L + ([int64]$matches[2])*60000L + ([int64]$matches[3])*1000L + [int64]$MsLimpio) }
 
+                            # --- Cierre FORZADO de la aplicación (Pablo, 14/09/2026) ---
+                            # "Starting one-XAgent" = arranque de un proceso NUEVO. Si ya habíamos visto actividad
+                            # antes (no es el primer login del día) y NO hubo un cierre normal ($CierreAppList:
+                            # ExitHandler/Shutdown()) entre esa última actividad y este arranque, la app se cerró
+                            # sola — típicamente por una excepción sin manejar (ej. una transferencia inválida,
+                            # ver caso real 13/09/2026). Se cita la hora exacta de la última actividad conocida Y
+                            # la del reinicio, con el silencio entre ambas, para que quede inequívoco qué pasó y
+                            # cuándo (mismo criterio de claridad que el cruce de reinicios de Windows).
+                            $MsActualCF = & $MsDeSlot "$HoraLimpia,$MsLimpio"
+                            if ($linea -match "(?i)OneXAgentUI\.App Starting one-XAgent" -and $UltimaActividadAbsMs -ge 0) {
+                                $huboCierreNormal = $false
+                                foreach ($ca in $CierreAppList) {
+                                    $caMs = & $MsDeSlot $ca.Slot
+                                    if ($caMs -ge 0 -and $caMs -ge $UltimaActividadAbsMs -and $caMs -le $MsActualCF) { $huboCierreNormal = $true; break }
+                                }
+                                if (-not $huboCierreNormal) {
+                                    $SlotCierreForzado = "$HoraLimpia,$MsLimpio"
+                                    Init-Hora $SlotCierreForzado
+                                    if ($EventosTiempo[$SlotCierreForzado].AppLog -eq "") {
+                                        $silencioSeg = [math]::Round(($MsActualCF - $UltimaActividadAbsMs) / 1000, 1)
+                                        $EventosTiempo[$SlotCierreForzado].AppLog   = "⚠ CIERRE FORZADO DE LA APLICACIÓN: se reinició sola (última actividad a las $UltimaActividadSlot, reinicio a las $HoraLimpia,$MsLimpio — silencio de $($silencioSeg)s, sin cierre normal detectado)"
+                                        $EventosTiempo[$SlotCierreForzado].ColorApp = [System.Drawing.Color]::OrangeRed
+                                        $EventosTiempo[$SlotCierreForzado].RawAppLog += "¿Por qué? Se detectó '$linea' sin ningún ExitHandler/Shutdown() previo desde la última línea con actividad:`n--- Última actividad ($UltimaActividadSlot) ---`n$UltimaActividadRaw`n--- Reinicio ($HoraLimpia,$MsLimpio) ---`n$linea`n"
+                                        if ($EventosTiempo[$SlotCierreForzado].Tel -eq "-") { $EventosTiempo[$SlotCierreForzado].Tel = "AVAYA/ONEX" }
+                                    }
+                                }
+                            }
+                            $UltimaActividadAbsMs = $MsActualCF; $UltimaActividadSlot = "$HoraLimpia,$MsLimpio"; $UltimaActividadRaw = $linea
+
                             # --- Intento de desfirme (LogoutAgentHandler) que puede FALLAR ---
                             # "LogoutAgent:session=...;code=ReasonCode[10]" es la solicitud (misma línea que ya
                             # capturaba el bucket de reason codes más abajo como "SISTEMA_LOGOUT|" en el slot
@@ -963,15 +1005,31 @@ $btnAnalizar.Add_Click({
                                     $EventosTiempo[$SlotDesfirmeSolicitud].RawInterpretacion  += "$linea`n"
                                 }
                             }
+                            # --- Clic real de CUALQUIER botón favorito abreviado (Pablo, 14/09/2026) ---
+                            # "Begin Executing method Invoke(fnu=abrv-dial...)" es el ÚNICO rastro del clic físico
+                            # en un botón tipo "abrv-dial" (como Desfirmarse). Validado con prueba controlada
+                            # (log 172.18.224.150 18:03, el asesor SOLO dio clic en "Desfirmarse"): el Invoke
+                            # aparece 20ms antes del primer "Feature : DESFIRMARSE". Necesario porque esa línea
+                            # de Feature TAMBIÉN aparece sola, sin ningún Invoke cerca, como ruido de
+                            # ASTFeaturesListEvent (refresco periódico de la lista de favoritos) — caso real que
+                            # generó un desfirme falso (log 172.18.224.150 14/09, 16:49:20, el asesor no tocó nada).
+                            if ($linea -match "(?i)Begin Executing method Invoke\(fnu=abrv-dial") {
+                                $UltimoInvokeAbrvDialMs = & $MsDeSlot "$HoraLimpia,$MsLimpio"
+                            }
                             # --- Intento de desfirme (Mecanismo 3: botón favorito "Desfirmarse", Pablo 09/09/2026) ---
                             # Este botón (tipo "abrv-dial", marca el FAC 565 por su cuenta) nunca pasa por
                             # LogoutAgentHandler ni deja la línea "LogoutAgent:...code=ReasonCode[10]" de arriba —
-                            # Avaya lo resuelve solo. La única señal inequívoca es "Feature : DESFIRMARSE" (el
-                            # nombre interno del botón), pero aparece 2 veces por cada uso: al presionarlo Y al
-                            # soltarlo — el guard "-not $DesfirmeEsperandoConfirmacion" evita disparar 2 veces.
+                            # Avaya lo resuelve solo. La señal "Feature : DESFIRMARSE" (el nombre interno del
+                            # botón) aparece 2 veces por cada uso real: al presionarlo Y al soltarlo — el guard
+                            # "-not $DesfirmeEsperandoConfirmacion" evita disparar 2 veces. PERO esa misma línea
+                            # también aparece como ruido de ASTFeaturesListEvent sin que el asesor haya tocado
+                            # nada (ver caso real arriba) — por eso se exige un Invoke(fnu=abrv-dial) real en los
+                            # últimos 3s (ventana igual a la usada en otros detectores de este script).
                             # Comparte la MISMA confirmación real que ya captura el bloque de abajo (con
                             # $DesfirmeEsperandoConfirmacion activa) — no hace falta nada adicional para eso.
-                            if ($linea -match "(?i)Feature\s*:\s*DESFIRMARSE" -and -not $DesfirmeEsperandoConfirmacion) {
+                            $MsFeatureDesfirmarse = & $MsDeSlot "$HoraLimpia,$MsLimpio"
+                            $HuboClicAbrvDialReal = ($UltimoInvokeAbrvDialMs -ge 0 -and $MsFeatureDesfirmarse -ge 0 -and ($MsFeatureDesfirmarse - $UltimoInvokeAbrvDialMs) -ge 0 -and ($MsFeatureDesfirmarse - $UltimoInvokeAbrvDialMs) -le 3000)
+                            if ($linea -match "(?i)Feature\s*:\s*DESFIRMARSE" -and -not $DesfirmeEsperandoConfirmacion -and $HuboClicAbrvDialReal) {
                                 $DesfirmeEnProceso = $true
                                 $DesfirmeYaConfirmado = $false
                                 $DesfirmeEsperandoConfirmacion = $true
@@ -1294,8 +1352,11 @@ $btnAnalizar.Add_Click({
                                 }
                                 $EventosTiempo[$HoraLimpia].RawAux += "$linea`n"
                             }
-                            elseif ($linea -match "(?i)GUI Method (STARTED|ENDED): (?:TransferCallHandler|TransferHandler|ConsultationHandler|CompleteTransferHandler)") {
+                            elseif ($linea -match "(?i)GUI Method (STARTED|ENDED): (?:TransferCallHandler|TransferHandler|ConsultationHandler|ConsultativeTransferHandler|CompleteTransferHandler)") {
                                 # TransferCallHandler = el clic real del asesor en "Transferir" (log moderno).
+                                # ConsultativeTransferHandler = el SEGUNDO clic en "Transferir" (el que completa
+                                # una transferencia asistida) — nombre de handler DISTINTO al del primer clic
+                                # (Pablo, 14/09/2026: probado con log real 172.18.224.150 14/09, faltaba en el regex).
                                 # Capturarlo es clave: alimenta $UltimaTransfGUIHora, que distingue transferencia
                                 # MANUAL (con GUI) de AUTOMÁTICA (sin GUI) en OnRequestTransferSession (~1848).
                                 $UltimaTransfGUIHora = $HoraLimpia
@@ -2842,22 +2903,40 @@ $btnAnalizar.Add_Click({
                                 $EventosTiempo[$UnmuteSlotSeg[$HoraLimpia]].RawAgente += "$linea`n"
                             }
                             elseif ($linea -match "Message type= TransferSessionRequest" -or $linea -match "OnRequestTransferSession") {
+                                # TargetConnectionIdSpecified=1 = el destino de la consulta YA tiene conexión
+                                # establecida → esta línea es el CIERRE de una transferencia asistida (el asesor
+                                # volvió a presionar "Transferir" para completarla), NO un nuevo inicio.
+                                # TargetConnectionIdSpecified=0 (o ausente) = arranque de la consulta (1er clic).
+                                # (Pablo, 14/09/2026: validado con log real 172.18.224.150 14/09 — sin esto, el
+                                # cierre se etiquetaba "TRANSFERENCIA INICIADA" 1 ms antes de "COMPLETADA".)
+                                $EsCompletarTransf = ($linea -match "TargetConnectionIdSpecified=1")
+
                                 # Dedup: si ya existe la fila de inicio de transferencia en este mismo segundo
                                 # (slot base o ms), no crear otra. TransferSessionRequest y OnRequestTransferSession
                                 # pueden disparar en el mismo segundo y producían dos filas idénticas.
                                 $YaHayTransfIni = $false
                                 foreach ($kT in @($EventosTiempo.Keys)) {
-                                    if (($kT -eq $HoraLimpia -or $kT -match "^$([regex]::Escape($HoraLimpia)),\d+$") -and $EventosTiempo[$kT].Agente -match "TRANSFERENCIA INICIADA|Asesor presiona bot.n Transferir") { $YaHayTransfIni = $true; break }
+                                    if (($kT -eq $HoraLimpia -or $kT -match "^$([regex]::Escape($HoraLimpia)),\d+$") -and $EventosTiempo[$kT].Agente -match "TRANSFERENCIA INICIADA|Asesor presiona bot.n Transferir") {
+                                        # Si esta línea SÍ es el cierre, mejorar la etiqueta ya creada (por la línea
+                                        # "Message type=..." 1 ms antes) en vez de descartar la información nueva.
+                                        if ($EsCompletarTransf -and $EventosTiempo[$kT].Agente -notmatch "completa la transferencia") {
+                                            $EventosTiempo[$kT].Agente = "$symArr Asesor presiona botón Transferir (completa la transferencia)"
+                                            $EventosTiempo[$kT].RawAgente += "$linea`n"
+                                        }
+                                        $YaHayTransfIni = $true; break
+                                    }
                                 }
                                 if (-not $YaHayTransfIni) {
-                                    # Si hubo clic GUI (TransferCallHandler) en este segundo → fue el asesor.
-                                    # Si no hubo clic → transferencia AUTOMÁTICA (sistema). El clic puede caer 1 s antes.
+                                    # Si hubo clic GUI (TransferCallHandler/ConsultativeTransferHandler) en este
+                                    # segundo → fue el asesor. Si no hubo clic → transferencia AUTOMÁTICA (sistema).
+                                    # El clic puede caer 1 s antes.
                                     $HuboClicTransf = $TransfClicSeg.ContainsKey($HoraLimpia)
                                     if (-not $HuboClicTransf) {
                                         try { $sPrevT = ([datetime]::ParseExact($HoraLimpia,"HH:mm:ss",$null).AddSeconds(-1)).ToString("HH:mm:ss"); if ($TransfClicSeg.ContainsKey($sPrevT)) { $HuboClicTransf = $true } } catch {}
                                     }
-                                    if ($HuboClicTransf) { $EvA="$symArr Asesor presiona botón Transferir"; $ColorA=[System.Drawing.Color]::Plum }
-                                    else                 { $EvA="$symArr TRANSFERENCIA INICIADA";           $ColorA=[System.Drawing.Color]::Plum }
+                                    if ($EsCompletarTransf) { $EvA="$symArr Asesor presiona botón Transferir (completa la transferencia)"; $ColorA=[System.Drawing.Color]::Plum }
+                                    elseif ($HuboClicTransf) { $EvA="$symArr Asesor presiona botón Transferir"; $ColorA=[System.Drawing.Color]::Plum }
+                                    else                      { $EvA="$symArr TRANSFERENCIA INICIADA";           $ColorA=[System.Drawing.Color]::Plum }
                                 }
                             }
                             elseif ($linea -match "Message type= MoveSessionToConferenceRequest" -or $linea -match "OnRequestMoveSessionToConference") { $EvA="↔ CONFERENCIA INICIADA"; $ColorA=[System.Drawing.Color]::Orchid }
@@ -4726,6 +4805,7 @@ $btnAnalizar.Add_Click({
                     elseif ($Obj.SysLog -match "PANTALLAZO AZUL|Apagado Sucio|Corte energía|Memoria Virtual Agotada|Tarjeta de Red desconectada" -or $Obj.AppLog -match "Caída de Túnel Principal") {
                         $Interp = "FALLA TÉCNICA (Justificado / Caída de Sistema o Red)"; $ColorInterp = [System.Drawing.Color]::LimeGreen
                     }
+                    elseif ($Obj.AppLog -match "CIERRE FORZADO DE LA APLICACIÓN") { $Interp = $Obj.AppLog; $ColorInterp = [System.Drawing.Color]::Red; if ($Obj.RawAppLog -ne "" -and $Obj.RawInterpretacion -eq "") { $Obj.RawInterpretacion += $Obj.RawAppLog } }
                     elseif ($Obj.AppLog -match "hilo interno abortado") { $Interp = "Aviso: Avaya reinició un hilo interno (la app NO se cerró)"; $ColorInterp = [System.Drawing.Color]::Orange }
                     elseif ($Obj.AppLog -match "System.Exception") { $Interp = "Falla grave en llamada"; $ColorInterp = [System.Drawing.Color]::Red }
                     elseif ($Obj.Audio -match "Dispositivo de Audio Desconectado") { $Interp = "¡ALERTA CRÍTICA! Diadema desconectada físicamente"; $ColorInterp = [System.Drawing.Color]::Red }
