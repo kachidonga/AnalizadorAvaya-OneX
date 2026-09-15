@@ -2352,6 +2352,12 @@ $btnAnalizar.Add_Click({
             $ArchivosLog = Get-ChildItem -Path $DirFinal -Filter "EndpointLog.txt*" | Sort-Object { if ($_.Name -match "\.(\d+)$") { [int]$matches[1] } else { -1 } } -Descending
             $MapeoTel = @{}; $RawMapeoTel = @{}; $DirLlamada = @{}; $CurrentExt = "Desconocida"
             $LlamadasVistas = @{}; $CuelguesVistos = @{}; $CuelguesManuales = @{}; $EstadoSesion = @{}
+            $EstadoSesionActivaMs = @{}   # sesión → ms de cuando quedó ACTIVA (Pablo, 14/09/2026): la llamada
+                                          # fantasma que Avaya crea para marcar el FAC de LOGIN (564...) nace y
+                                          # queda "ACTIVA" en el MISMO instante en que se dispara el barrido de
+                                          # "sesiones zombie" del re-login — sin distinguirla, se marcaba a sí
+                                          # misma como "SESIÓN ABORTADA (Firma forzada)" (falso positivo real:
+                                          # log 172.18.224.150 18:28, re-firma sin cerrar OneX tras Desfirmarse).
             $ConsultaTransf = @{}; $ConsultaConf = @{}   # sesId → destino: sesiones de consulta (Transferencia/Conferencia)
             $TransferConsultaColgada = $false             # $true cuando Transfer_CompleteSetup trae nfirstCall==nSecondCall (la pata de consulta/destino ya colgó antes de completar)
             $TransferSinDestinoPorSes = @{}               # sesión cliente (from) → $true si "OnRequestTransferSession: To session id" == from (no se marcó un destino separado → transferencia SIN destino)
@@ -2630,9 +2636,18 @@ $btnAnalizar.Add_Click({
                                     continue
                                 }
                                 # Cerrar sesiones zombie antes del nuevo login
+                                # GUARD (Pablo, 14/09/2026): Avaya crea su PROPIA llamada fantasma para marcar el
+                                # FAC de login (564...) — nace y queda "ACTIVA" en los mismos ms en que dispara
+                                # esta MISMA línea de NormalizeNumber. Sin este guard, el barrido se marcaba a sí
+                                # mismo como zombie ("SESIÓN ABORTADA") en cada re-firma, aunque todo fuera normal.
+                                $MsAhoraZombi = & $MsDeSlot "$HoraLimpia,$MsLimpio5"
                                 $LlavesZombi = @($EstadoSesion.Keys)
                                 foreach ($SesZombi in $LlavesZombi) {
                                     if ($EstadoSesion[$SesZombi] -eq "ACTIVA") {
+                                        if ($EstadoSesionActivaMs.ContainsKey($SesZombi) -and $MsAhoraZombi -ge 0 -and
+                                            ($MsAhoraZombi - $EstadoSesionActivaMs[$SesZombi]) -ge 0 -and ($MsAhoraZombi - $EstadoSesionActivaMs[$SesZombi]) -le 1000) {
+                                            continue   # nació hace ≤1s -- es la propia llamada fantasma de ESTE login, no un zombie real
+                                        }
                                         $HorasSesion = @(); $LlavesTiempo = @($EventosTiempo.Keys)
                                         foreach ($h in $LlavesTiempo) { if ($EventosTiempo[$h].Sesion -eq $SesZombi) { $HorasSesion += $h } }
                                         if ($HorasSesion.Count -gt 0) {
@@ -2680,6 +2695,7 @@ $btnAnalizar.Add_Click({
                                 # Ej: 95539991927 → 5539991927  |  +5539991927 → 5539991927  (mismo número, distintos formatos)
                                 $TelNorm = ($TelActual -replace '^\+','') -replace '^9(\d{10,})$','$1'
                                 $FirmaUnica = "$Ses-$TelNorm"; $EstadoSesion[$Ses] = "ACTIVA"
+                                $EstadoSesionActivaMs[$Ses] = & $MsDeSlot "$HoraLimpia,$MsLimpio5"
                                 # Fijar el PRIMER número real de la sesión (una sola vez; se libera en SessionEnded).
                                 # Si un update posterior trae otro número → la sesión CAMBIÓ = transferencia inter-agente real.
                                 if (-not $_PrimerFonoSes.ContainsKey($Ses) -and $TelActual -ne "Desconocido" -and $TelNorm -ne "") { $_PrimerFonoSes[$Ses] = $TelNorm }
@@ -3704,6 +3720,22 @@ $btnAnalizar.Add_Click({
                     if ($EventosTiempo[$ep.Slot].Tel -eq "-") { $EventosTiempo[$ep.Slot].Tel = "RED/AVAYA" }
                 }
             }
+            # 6-bis) "Recuperado por PBX" (Amnesia V21, columna Interpretación): esa etiqueta se ponía SIEMPRE
+            # que el re-login no dejara rastro de un Login() de estación fresco (ver PASO 5, "Protocolo de
+            # Login") — pero eso también pasa en un reingreso NORMAL sin cerrar OneX (ej. tras un Desfirmarse,
+            # caso real Pablo 14/09/2026: log 172.18.224.150 18:28, sin ninguna caída de red de por medio). Se
+            # relabela usando la MISMA evidencia real de reconexión (bLInkRecovery=1, ±120s) que ya usa el punto
+            # 6) de arriba — si no hay reconexión real cerca, no fue "recuperado por PBX", fue un reingreso normal.
+            foreach ($kPbx in @($EventosTiempo.Keys)) {
+                if ($EventosTiempo[$kPbx].Interpretacion -match "Recuperado por PBX") {
+                    $msPbx = & $MsDeSlot $kPbx
+                    $cercaPbx = $false
+                    foreach ($okm in $reconOkMs) { if ($okm -ge 0 -and $msPbx -ge 0 -and [math]::Abs($okm - $msPbx) -le 120000) { $cercaPbx = $true; break } }
+                    if (-not $cercaPbx) {
+                        $EventosTiempo[$kPbx].Interpretacion = $EventosTiempo[$kPbx].Interpretacion -replace "\(Recuperado por PBX\)", "(reingreso sin cerrar OneX)"
+                    }
+                }
+            }
             # 7) Hilo interno abortado: SOLO es aviso si NO hubo un cierre de app cercano (±60 s). Si el
             #    abort fue parte del teardown de un cierre, se SUPRIME (la fila de CIERRE ya lo cuenta).
             $cierreMs = @(@($CierreAppList) | ForEach-Object { & $MsDeSlot $_.Slot })
@@ -4549,6 +4581,15 @@ $btnAnalizar.Add_Click({
             # el CM mantiene el ÚLTIMO auxiliar usado (confirmado por Pablo: la GUI de OneX mostraba "Aux
             # Sistemas" en ese caso, aunque hubiera pasado por Disponible antes). Pablo, prueba 28/08/2026.
             $UltimoMotivoElegido = ""
+            # $UltimoAuxConCodigoMs (Pablo, 14/09/2026): ms del último Auxiliar YA confirmado con código real
+            # (Confirmado por clic / vía botón favorito con motivo). Avaya a veces parpadea internamente
+            # "oldState=Ready;newState=LoggedOut" -> "oldState=LoggedOut;newState=Aux" ~400ms después de una
+            # entrada a Auxiliar CON código — ese 2º blip cae en el slot BASE del segundo siguiente (sin el
+            # "Enter Aux"/ReasonCode de su propio segundo) y se confundía con un TrabAux real sin código.
+            # Caso real (log 172.18.224.150 14/09): clic correcto con motivo SISTEMAS a las 16:42:00,641 ->
+            # blip a las 16:42:01,058/075 (cruza el segundo) generaba un falso "se detectó un auxiliar sin
+            # código". Se usa una ventana de 1500ms para no ocultar un TrabAux real y separado.
+            $UltimoAuxConCodigoMs = -1
             $RecienFirmado = $false; $ValidandoLogin = $false; $LoginFallido = $false
             $LoginYaConfirmado = $false   # login confirmado en este ciclo; se reabre solo con un desfirme real (evita doble "firmado exitosamente" por eventos intermedios)
             # DEFAULT AUTOMÁTICO POST-LOGIN: Avaya dispara "Enter Aux;code=ReasonCode[0]" DOS veces al firmarse
@@ -4929,6 +4970,7 @@ $btnAnalizar.Add_Click({
                             $Interp = "Asesor se cambia a Auxiliar [$NombreRC] (vía botón favorito)"; $CurrentAux = "$symUser Estado: AUXILIAR ($NombreRC)"; $CurrentColor = [System.Drawing.Color]::Orange
                             $ColorInterp = [System.Drawing.Color]::Orange
                             $EsperandoDefaultPostLogin = $false; $EnDefaultPostLogin = $false
+                            $UltimoAuxConCodigoMs = & $MsDeSlot $H
                         }
                         else {
                             # Puntos 2 y 3 (Pablo): TrabAux SIN elegir motivo. En vez de un "Auxiliar" genérico y
@@ -4942,9 +4984,19 @@ $btnAnalizar.Add_Click({
                             # inferencia puede estar sencillamente equivocada (la causa real vive en la
                             # configuración del conmutador, invisible en este log). Se quita la adivinanza:
                             # solo se reporta el HECHO (auxiliar sin código elegido), sin aventurar cuál fue.
-                            $Interp = "Asesor se cambia a Auxiliar - se detectó un auxiliar sin código"
-                            $CurrentAux = "$symUser Estado: AUXILIAR"; $CurrentColor = [System.Drawing.Color]::LightCoral
-                            $ColorInterp = [System.Drawing.Color]::Orange
+                            # GUARD (Pablo, 14/09/2026, caso 172.18.224.150): el parpadeo interno de Avaya
+                            # (LoggedOut->Aux, ~400ms después de un Auxiliar YA confirmado con código) cae en el
+                            # slot BASE del segundo siguiente y llegaba hasta aquí como si fuera un TrabAux nuevo
+                            # sin código. Si el último Auxiliar con código real fue hace ≤1500ms, es ese mismo
+                            # eco — no un evento nuevo — y se suprime en vez de mostrarse.
+                            $msAuxSC = & $MsDeSlot $H
+                            if ($UltimoAuxConCodigoMs -ge 0 -and $msAuxSC -ge 0 -and ($msAuxSC - $UltimoAuxConCodigoMs) -ge 0 -and ($msAuxSC - $UltimoAuxConCodigoMs) -le 1500) {
+                                $Interp = ""
+                            } else {
+                                $Interp = "Asesor se cambia a Auxiliar - se detectó un auxiliar sin código"
+                                $CurrentAux = "$symUser Estado: AUXILIAR"; $CurrentColor = [System.Drawing.Color]::LightCoral
+                                $ColorInterp = [System.Drawing.Color]::Orange
+                            }
                             $EsperandoDefaultPostLogin = $false; $EnDefaultPostLogin = $false
                         }
                         $Obj.Aux = $CurrentAux; $Obj.ColorAux = $CurrentColor
@@ -4998,7 +5050,7 @@ $btnAnalizar.Add_Click({
                                 if ($EsperandoDefaultPostLogin)  { $Interp = "Asesor firmado y en Default"; $ColorInterp = [System.Drawing.Color]::LimeGreen; $EsperandoDefaultPostLogin = $false; $EnDefaultPostLogin = $true }
                                 elseif ($EnDefaultPostLogin)     { $Interp = "" }
                                 $CurrentAux = "$symUser Estado: DEFAULT"; $CurrentColor = [System.Drawing.Color]::CadetBlue; $Obj.Aux = $CurrentAux; $Obj.ColorAux = $CurrentColor
-                            } else { $EsperandoDefaultPostLogin = $false; $EnDefaultPostLogin = $false }
+                            } else { $EsperandoDefaultPostLogin = $false; $EnDefaultPostLogin = $false; $UltimoAuxConCodigoMs = & $MsDeSlot $H }
                         }
                     }
                     elseif ($Obj.RawAux -match "(?i)Enter\s+Aux" -and $Interp -notmatch "señal de llamada|INICIO DE LLAMADA|LÍNEA ABIERTA") {
@@ -5018,7 +5070,7 @@ $btnAnalizar.Add_Click({
                                 if ($EsperandoDefaultPostLogin)  { $Interp = "Asesor firmado y en Default"; $ColorInterp = [System.Drawing.Color]::LimeGreen; $EsperandoDefaultPostLogin = $false; $EnDefaultPostLogin = $true }
                                 elseif ($EnDefaultPostLogin)     { $Interp = "" }
                                 $CurrentAux = "$symUser Estado: DEFAULT"; $CurrentColor = [System.Drawing.Color]::CadetBlue; $Obj.Aux = $CurrentAux; $Obj.ColorAux = $CurrentColor
-                            } else { $EsperandoDefaultPostLogin = $false; $EnDefaultPostLogin = $false }
+                            } else { $EsperandoDefaultPostLogin = $false; $EnDefaultPostLogin = $false; if ($NombreRC -ne "") { $UltimoAuxConCodigoMs = & $MsDeSlot $H } }
                         }
                     }
 
