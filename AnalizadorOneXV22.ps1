@@ -2000,8 +2000,12 @@ $btnAnalizar.Add_Click({
                             # BRIDGED_CONNECTED solo aparece en LLAMADAS BRIDGE cuando RemoteParty es vacío [,].
                             # En llamadas ACD normales, BRIDGED_CONNECTED sí aparece pero siempre con RemoteParty real.
                             # La combinación BRIDGED_CONNECTED + RemoteParty=[,] es exclusiva de sesiones bridge/phantom.
-                            elseif ($linea -match "(?i)(?:PhoneService_CallStateChanged|PhoneService_CallUpdated):call=Id=(\d+).*?InnerState=BRIDGED_CONNECTED" -and $linea -match "RemoteParty=\[,\]") {
-                                $BridgeId = $matches[1]
+                            elseif ($linea -match "(?i)(?:PhoneService_CallStateChanged|PhoneService_CallUpdated):call=Id=(\d+).*?InnerState=BRIDGED_CONNECTED") {
+                                # OJO: capturar $matches[1] AQUI, antes del siguiente -match (RemoteParty),
+                                # porque cualquier -match subsecuente sobreescribe $matches y lo deja vacio.
+                                $BridgeIdCandidato = $matches[1]
+                                if ($linea -match "RemoteParty=\[,\]") {
+                                $BridgeId = $BridgeIdCandidato
                                 $SesionesBridge[$BridgeId] = $HoraLimpia
                                 $DirLlamada[$BridgeId] = "BRIDGE"
                                 # Una sola fila por sesión; se registra $BridgeSlot para que el retract la pueda limpiar.
@@ -2016,6 +2020,7 @@ $btnAnalizar.Add_Click({
                                     }
                                 }
                                 $EventosTiempo[$BridgeSlot[$BridgeId]].RawInterpretacion += "$linea`n"
+                                }
                             }
                             # --- SECONDARY CONNECTED: InnerState=CONNECTED (usa ID numérico, sin UUID) ---
                             # Fallback por si type=Active no apareció. Guarda RemoteParty y previene duplicados.
