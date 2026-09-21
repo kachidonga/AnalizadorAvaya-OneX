@@ -5050,6 +5050,15 @@ $btnAnalizar.Add_Click({
                     elseif ($Obj.AppLog -match "Aplicación iniciada") { $Interp = $Obj.AppLog; $ColorInterp = [System.Drawing.Color]::LimeGreen; if ($Obj.RawAppLog -ne "" -and $Obj.RawInterpretacion -eq "") { $Obj.RawInterpretacion += $Obj.RawAppLog } }
                     elseif ($Obj.AppLog -match "hilo interno abortado") { $Interp = "Aviso: Avaya reinició un hilo interno (la app NO se cerró)"; $ColorInterp = [System.Drawing.Color]::Orange }
                     elseif ($Obj.AppLog -match "System.Exception") { $Interp = "Falla grave en llamada"; $ColorInterp = [System.Drawing.Color]::Red }
+                    elseif ($Obj.AppLog -match "FALLO CONFERENCIA") {
+                        # Pendiente desde junio 2026: la detección de RC_RESPONSE_NULL en conferencia
+                        # (MoveSessionToConferenceCommand response is null / timeout de 15s) ya escribía en
+                        # AppLog, pero nunca tenía rama en esta cadena de prioridad — solo se veía en la
+                        # columna "Log de Aplicación", nunca en la columna principal. Se promueve igual que
+                        # CIERRE FORZADO/Falla grave en llamada, para que no pase desapercibida.
+                        $Interp = $Obj.AppLog; $ColorInterp = [System.Drawing.Color]::Red
+                        if ($Obj.RawAppLog -ne "" -and $Obj.RawInterpretacion -eq "") { $Obj.RawInterpretacion += $Obj.RawAppLog }
+                    }
                     elseif ($Obj.Audio -match "Dispositivo de Audio Desconectado") { $Interp = "¡ALERTA CRÍTICA! Diadema desconectada físicamente"; $ColorInterp = [System.Drawing.Color]::Red }
                     elseif ($Obj.Agente -match "CUELGUE MANUAL|LLAMADA COLGADA POR EL ASESOR") {
                         if ($Interp -match "Línea abierta sin marcar") { $Interp = "Precaución: El asesor abrió y cerró línea sin marcar"; $ColorInterp = [System.Drawing.Color]::Orange }
