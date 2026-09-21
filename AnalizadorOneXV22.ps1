@@ -500,6 +500,11 @@ $btnAnalizar.Add_Click({
     # comparando contra el último "pulso" (última línea con timestamp vista) y $CierreAppList: si NO hubo un
     # cierre normal (ExitHandler/Shutdown()) entre esa última actividad y este arranque, la app se cayó sola.
     $UltimaActividadAbsMs = -1; $UltimaActividadSlot = ""; $UltimaActividadRaw = ""
+    # Marca del arranque ANTERIOR de la app (Pablo, 21/09/2026): a diferencia de $UltimaActividadAbsMs
+    # (que avanza con CUALQUIER línea, incluso ruido post-cierre), este valor SOLO se actualiza en cada
+    # "Starting one-XAgent" — un ancla estable para saber si hubo un cierre normal ENTRE un arranque y el
+    # siguiente, sin importar cuánto tiempo pasó entre medio (ej. cerrar antes de comer, reabrir 1h después).
+    $UltimoInicioAppMs = -1
     $DesfirmeFallidoList = @()       # intentos de desfirme fallidos ("Session_LogoutAgent failed") — PASO 4; la fila
                                       # real se arma DESPUÉS de PASO 5 (ver barrido pre-PASO 6) porque el ms heredado
                                       # puede coincidir con un FIN DE LLAMADA de otra sesión que PASO 5 aún no ha
@@ -563,6 +568,11 @@ $btnAnalizar.Add_Click({
     # las filas "sin marcar"/EVASIÓN que caigan dentro. $_loginBeginSlot = Begin pendiente de cerrar.
     $LoginWins          = @()
     $_loginBeginSlot    = ""
+    # Login CANCELADO a medio proceso (Pablo, 21/09/2026 — caso "no se escuchaba en la diadema"):
+    # "OneXAgentUI.App Cancelling agent login process." + CancelAgentLoginEvent. Deja una pata fantasma
+    # (Tel corto tipo "564", sin completar el FAC largo) que el detector genérico de cuelgue confundía con
+    # una llamada real colgada. $UltimoLoginCanceladoMs = ms del último cancelado, para suprimir esa pata.
+    $UltimoLoginCanceladoMs = -999999
     # Lecturas de calidad de red (IspeacLog RTCP). NO crean filas propias (eso saturaba el timeline):
     # se recolectan aquí y un barrido pre-render las ADJUNTA a las filas de evento YA EXISTENTES
     # (la más cercana en el tiempo). $LossReadings = pérdida de paquetes (%), $RttReadings = lag ida/vuelta (ms).
@@ -945,20 +955,56 @@ $btnAnalizar.Add_Click({
                             # cuándo (mismo criterio de claridad que el cruce de reinicios de Windows).
                             $MsActualCF = & $MsDeSlot "$HoraLimpia,$MsLimpio"
                             if ($linea -match "(?i)OneXAgentUI\.App Starting one-XAgent") {
-                                if ($UltimaActividadAbsMs -ge 0) {
+                                if ($UltimoInicioAppMs -ge 0) {
+                                    # Fix (Pablo, 21/09/2026 — prueba controlada real, y corregido de nuevo tras
+                                    # su observación de que un límite de tiempo fijo se rompe con un cierre normal
+                                    # seguido de una reapertura HORAS después, ej. cerrar antes de ir a comer):
+                                    # antes se exigía que el cierre normal fuera posterior a $UltimaActividadAbsMs,
+                                    # pero esa variable avanza con CUALQUIER línea de log (incluye el ruido normal
+                                    # que sigue unos ms después del propio "PhoneService shutdown"), así que el
+                                    # cierre normal siempre quedaba "antes" del punto de referencia y nunca se
+                                    # reconocía. Ahora se compara contra $UltimoInicioAppMs — la hora del arranque
+                                    # ANTERIOR de la app (ancla estable, solo se mueve con "Starting one-XAgent") —
+                                    # y se pregunta por ORDEN, no por tiempo transcurrido: ¿hubo un cierre normal
+                                    # en ALGÚN MOMENTO entre ese arranque anterior y este arranque nuevo? Da igual
+                                    # si pasaron 5 segundos o 5 horas entre medio.
                                     $huboCierreNormal = $false
                                     foreach ($ca in $CierreAppList) {
                                         $caMs = & $MsDeSlot $ca.Slot
-                                        if ($caMs -ge 0 -and $caMs -ge $UltimaActividadAbsMs -and $caMs -le $MsActualCF) { $huboCierreNormal = $true; break }
+                                        if ($caMs -ge 0 -and $caMs -ge $UltimoInicioAppMs -and $caMs -le $MsActualCF) { $huboCierreNormal = $true; break }
                                     }
                                     if (-not $huboCierreNormal) {
+                                        # Cruce contra reinicios de Windows (Pablo, 21/09/2026 — caso real: un
+                                        # reinicio del EQUIPO completo también explica que nunca haya un
+                                        # ExitHandler/Shutdown() normal de OneX, porque la app no se cierra "bien"
+                                        # cuando el sistema operativo se reinicia debajo de ella. Se busca un
+                                        # reinicio de Windows DENTRO de la ventana de silencio misma (mismo
+                                        # criterio que ya usa el cruce del Desfirme Automático más abajo).
+                                        $reinicioEnSilencio = $null
+                                        foreach ($rw in $ReinicioWindowsList) {
+                                            $rwMs = & $MsDeSlot $rw.Slot
+                                            if ($rwMs -ge 0 -and $rwMs -ge ($UltimaActividadAbsMs - 5000) -and $rwMs -le $MsActualCF) { $reinicioEnSilencio = $rw; break }
+                                        }
                                         $SlotCierreForzado = "$HoraLimpia,$MsLimpio"
                                         Init-Hora $SlotCierreForzado
                                         if ($EventosTiempo[$SlotCierreForzado].AppLog -eq "") {
                                             $silencioSeg = [math]::Round(($MsActualCF - $UltimaActividadAbsMs) / 1000, 1)
-                                            $EventosTiempo[$SlotCierreForzado].AppLog   = "⚠ CIERRE FORZADO DE LA APLICACIÓN: se reinició sola (última actividad a las $UltimaActividadSlot, reinicio a las $HoraLimpia,$MsLimpio — silencio de $($silencioSeg)s, sin cierre normal detectado)"
-                                            $EventosTiempo[$SlotCierreForzado].ColorApp = [System.Drawing.Color]::OrangeRed
-                                            $EventosTiempo[$SlotCierreForzado].RawAppLog += "¿Por qué? Se detectó '$linea' sin ningún ExitHandler/Shutdown() previo desde la última línea con actividad:`n--- Última actividad ($UltimaActividadSlot) ---`n$UltimaActividadRaw`n--- Reinicio ($HoraLimpia,$MsLimpio) ---`n$linea`n"
+                                            if ($reinicioEnSilencio) {
+                                                # Nivel 1: hay reinicio de Windows clasificado (modo remoto, con Visor de Eventos) dentro del silencio.
+                                                $EventosTiempo[$SlotCierreForzado].AppLog   = "✓ Aplicación reabierta tras reinicio de Windows — consecuencia de: $($reinicioEnSilencio.Desc) (a las $($reinicioEnSilencio.Slot)). NO es un cierre inesperado de la app."
+                                                $EventosTiempo[$SlotCierreForzado].ColorApp = [System.Drawing.Color]::LimeGreen
+                                                $EventosTiempo[$SlotCierreForzado].RawAppLog += "¿Por qué? El equipo se reinició ($($reinicioEnSilencio.Raw)) dentro de la ventana de silencio, explicando por qué OneX nunca mandó un cierre normal.`n--- Última actividad ($UltimaActividadSlot) ---`n$UltimaActividadRaw`n--- Reinicio de la app ($HoraLimpia,$MsLimpio) ---`n$linea`n"
+                                            } elseif ($Script:RutaManual -eq "") {
+                                                # Nivel 3: modo remoto CON Visor de Eventos disponible, pero SIN ningún reinicio de Windows cerca -- alarma real.
+                                                $EventosTiempo[$SlotCierreForzado].AppLog   = "⚠ CIERRE FORZADO DE LA APLICACIÓN: se reinició sola (última actividad a las $UltimaActividadSlot, reinicio a las $HoraLimpia,$MsLimpio — silencio de $($silencioSeg)s, sin cierre normal detectado, ni reinicio de Windows que lo explique)"
+                                                $EventosTiempo[$SlotCierreForzado].ColorApp = [System.Drawing.Color]::OrangeRed
+                                                $EventosTiempo[$SlotCierreForzado].RawAppLog += "¿Por qué? Se detectó '$linea' sin ningún ExitHandler/Shutdown() previo desde la última línea con actividad, Y no se encontró ningún reinicio de Windows en el Visor de Eventos que lo explique:`n--- Última actividad ($UltimaActividadSlot) ---`n$UltimaActividadRaw`n--- Reinicio ($HoraLimpia,$MsLimpio) ---`n$linea`n"
+                                            } else {
+                                                # Nivel 2: modo offline/Ruta Manual, sin Visor de Eventos disponible -- no se puede confirmar ni descartar un reinicio de Windows.
+                                                $EventosTiempo[$SlotCierreForzado].AppLog   = "⚠ Aplicación reiniciada (causa incierta: silencio de $($silencioSeg)s desde $UltimaActividadSlot, sin cierre normal detectado). Análisis offline — sin conexión remota no se puede confirmar si fue un reinicio de Windows o un cierre inesperado de la app."
+                                                $EventosTiempo[$SlotCierreForzado].ColorApp = [System.Drawing.Color]::Orange
+                                                $EventosTiempo[$SlotCierreForzado].RawAppLog += "¿Por qué? Se detectó '$linea' sin ningún ExitHandler/Shutdown() previo desde la última línea con actividad. Este análisis es offline/Ruta Manual, así que no se pudo consultar el Visor de Eventos de Windows para confirmar si hubo un reinicio del equipo:`n--- Última actividad ($UltimaActividadSlot) ---`n$UltimaActividadRaw`n--- Reinicio ($HoraLimpia,$MsLimpio) ---`n$linea`n"
+                                            }
                                             if ($EventosTiempo[$SlotCierreForzado].Tel -eq "-") { $EventosTiempo[$SlotCierreForzado].Tel = "AVAYA/ONEX" }
                                         }
                                     } else {
@@ -986,6 +1032,7 @@ $btnAnalizar.Add_Click({
                                         if ($EventosTiempo[$SlotAppIniciada].Tel -eq "-") { $EventosTiempo[$SlotAppIniciada].Tel = "AVAYA/ONEX" }
                                     }
                                 }
+                                $UltimoInicioAppMs = $MsActualCF
                             }
                             $UltimaActividadAbsMs = $MsActualCF; $UltimaActividadSlot = "$HoraLimpia,$MsLimpio"; $UltimaActividadRaw = $linea
 
@@ -1295,6 +1342,33 @@ $btnAnalizar.Add_Click({
                                 Init-Hora $HoraLimpia
                                 $EventosTiempo[$HoraLimpia].Aux += "INTENTO_FIRMA_ONEX_EXT:$($matches[1])|"
                                 $EventosTiempo[$HoraLimpia].RawAux += "$linea`n"
+                                # Pablo, 21/09/2026: antes esta línea SOLO quedaba como tag interno (.Aux) para que
+                                # el "Protocolo de Login" (más abajo, cuando dispara el DIAL del FAC 564...) lo
+                                # correlacionara y armara "Usuario intentando firmarse en la Ext. N". Si ese DIAL
+                                # nunca llega (ej. el asesor cancela el login a medio proceso, como el caso de la
+                                # diadema sin audio), no quedaba NINGÚN rastro visible del intento. Ahora se pinta
+                                # de inmediato aquí mismo — el propio "Attempting to Login" ya trae el stationId,
+                                # no hace falta esperar al FAC. El Protocolo de Login (abajo) reconoce esta MISMA
+                                # fila por su texto ("Usuario intentando firmarse") y solo agrega evidencia en vez
+                                # de crear una fila duplicada cuando el login sí se completa normal.
+                                if ($EventosTiempo[$HoraLimpia].Interpretacion -eq "") {
+                                    $EventosTiempo[$HoraLimpia].Interpretacion      = "Usuario intentando firmarse en la Ext. $($matches[1])"
+                                    $EventosTiempo[$HoraLimpia].ColorInterpretacion = [System.Drawing.Color]::Yellow
+                                }
+                            }
+                            # --- Login cancelado a medio proceso (Pablo, 21/09/2026) ---
+                            # "Cancelling agent login process." + CancelAgentLoginEvent: el asesor (o el sistema)
+                            # abortó el intento de firma antes de completarse. Deja una pata fantasma corta
+                            # (Tel tipo "564", sin el FAC largo completo) que el detector de cuelgue confundía
+                            # con una llamada real colgada (ver guard en PASO 5, OnRequestEndSession). Caso real:
+                            # asesora canceló porque no se escuchaba nada en la diadema.
+                            elseif ($linea -match "Cancelling agent login process\.") {
+                                $SlotLoginCancel = "$HoraLimpia,$MsLimpio"
+                                Init-Hora $SlotLoginCancel
+                                $EventosTiempo[$SlotLoginCancel].Interpretacion      = "$symStop Asesor canceló el intento de firma (login abortado)"
+                                $EventosTiempo[$SlotLoginCancel].ColorInterpretacion = [System.Drawing.Color]::Orange
+                                $EventosTiempo[$SlotLoginCancel].RawInterpretacion  += "$linea`n"
+                                $UltimoLoginCanceladoMs = & $MsDeSlot $SlotLoginCancel
                             }
                             # --- Modo de contestación (auto/manual), indexado por UUID del VI ---
                             # AUTO  = "Auto Accepting"          (el CM auto-contestó).
@@ -1479,7 +1553,7 @@ $btnAnalizar.Add_Click({
                                     $SlotFinConfBoton = "$HoraLimpia,$MsLimpio"
                                     Init-Hora $SlotFinConfBoton
                                     if ($EventosTiempo[$SlotFinConfBoton].Agente -eq "") {
-                                        $EventosTiempo[$SlotFinConfBoton].Agente      = "$symStop Asesor cuelga la conferencia"
+                                        $EventosTiempo[$SlotFinConfBoton].Agente      = "$symStop Asesor deja la conferencia"
                                         $EventosTiempo[$SlotFinConfBoton].ColorAgente = [System.Drawing.Color]::OrangeRed
                                     }
                                     $EventosTiempo[$SlotFinConfBoton].RawAgente += "$linea`n"
@@ -1489,15 +1563,26 @@ $btnAnalizar.Add_Click({
                                 }
                             }
                             elseif ($linea -match "AddVoiceInteraction:.*?destination=([^;]+);.*?intent=VoiceConsultConference") {
-                                # Momento exacto en que el asesor captura/marca el destino de la consulta de
-                                # conferencia (justo tras dar clic en el botón Conferencia y elegir/capturar el
-                                # número). Vive en AvayaOneXLog (WorkServiceImpl), no en EndpointLog — por eso
-                                # tiene que estar en ESTE bucle (PASO 4) y no en el de EndpointLog (PASO 5).
-                                $SlotMarcConf = "$HoraLimpia,$MsLimpio"
-                                Init-Hora $SlotMarcConf
-                                $EventosTiempo[$SlotMarcConf].Agente      = "$symArr Marcando para conferencia: $($matches[1])"
-                                $EventosTiempo[$SlotMarcConf].ColorAgente = [System.Drawing.Color]::Orchid
-                                $EventosTiempo[$SlotMarcConf].RawAgente  += "$linea`n"
+                                # Fusión (Pablo, 21/09/2026): antes esto creaba una fila APARTE ("Marcando para
+                                # conferencia: X") a unos ms de "Inicio de Conferencia (Botón)", como si fueran
+                                # dos acciones del asesor separadas en el tiempo. En realidad ambas líneas de
+                                # log caen casi juntas porque el clic real al botón + abrir el submenú "ingresar
+                                # valor" + teclear el número + Enter YA PASARON ANTES sin dejar rastro alguno en
+                                # el log (verificado: 13+ segundos de silencio total en "GUI Method" antes de
+                                # que arranque ConferenceCallHandler) — este evento es el momento en que se
+                                # CONFIRMÓ el destino, no el del clic inicial. Se actualiza la MISMA fila que
+                                # dejó "Inicio de Conferencia (Botón)" en vez de crear una fila nueva.
+                                if ($SlotConferenciaBoton -and $EventosTiempo.ContainsKey($SlotConferenciaBoton)) {
+                                    $EventosTiempo[$SlotConferenciaBoton].Agente      = "$symArr Asesor solicita conferencia hacia $($matches[1])"
+                                    $EventosTiempo[$SlotConferenciaBoton].ColorAgente = [System.Drawing.Color]::Orchid
+                                    $EventosTiempo[$SlotConferenciaBoton].RawAgente  += "$linea`n"
+                                } else {
+                                    $SlotMarcConf = "$HoraLimpia,$MsLimpio"
+                                    Init-Hora $SlotMarcConf
+                                    $EventosTiempo[$SlotMarcConf].Agente      = "$symArr Asesor solicita conferencia hacia $($matches[1])"
+                                    $EventosTiempo[$SlotMarcConf].ColorAgente = [System.Drawing.Color]::Orchid
+                                    $EventosTiempo[$SlotMarcConf].RawAgente  += "$linea`n"
+                                }
                             }
                             # --- ReasonCode y estados del agente (respaldo) ---
                             elseif ($linea -match "(?i)WorkServiceImpl EnterAux:session=.*?;code=(\d+)") {
@@ -2703,12 +2788,16 @@ $btnAnalizar.Add_Click({
                                         }
                                     } catch {}
                                 }
-                                # DEDUP del doble DIAL de login (Avaya dialea el FAC 564 dos veces): si ya hay un
-                                # "Usuario intentando firmarse" en los últimos ~3s, no crear otra fila. Si este 2º
-                                # dial encontró la Ext y el previo no, se mejora el previo. Va ANTES del cierre de
-                                # zombies para no ejecutarlo dos veces (evita doble "SESIÓN ABORTADA").
+                                # DEDUP del doble DIAL de login (Avaya dialea el FAC 564 dos veces, y a veces una
+                                # "pulsación" tardía del MISMO login llega bastante después): si ya hay un
+                                # "Usuario intentando firmarse" en los últimos ~20s, no crear otra fila. Ventana
+                                # ampliada (Pablo, 21/09/2026 — caso real: pulsación del mismo login 13s después
+                                # del primer "Attempting to Login"; con 3s se creaba una fila "nueva" fantasma que
+                                # terminaba relabeleada "(reingreso sin cerrar OneX)"). Si este 2º dial encontró
+                                # la Ext y el previo no, se mejora el previo. Va ANTES del cierre de zombies para
+                                # no ejecutarlo dos veces (evita doble "SESIÓN ABORTADA").
                                 $SlotPrevioIntento = $null
-                                for ($iP = 0; $iP -le 3 -and -not $SlotPrevioIntento; $iP++) {
+                                for ($iP = 0; $iP -le 20 -and -not $SlotPrevioIntento; $iP++) {
                                     try {
                                         $hP = ([datetime]::ParseExact($HoraLimpia,"HH:mm:ss",$null).AddSeconds(-$iP)).ToString("HH:mm:ss")
                                         foreach ($kP in @($EventosTiempo.Keys)) {
@@ -2927,7 +3016,14 @@ $btnAnalizar.Add_Click({
                             elseif ($linea -match "OnRequestEndSession\(\)\. [Ss]ession=\s*(\d+)") {
                                 $Ses=$matches[1]; $EventosTiempo[$HoraLimpia].Sesion=$Ses
                                 $TelActual=if($MapeoTel[$Ses]){$MapeoTel[$Ses]}else{"Desconocido"}; $EventosTiempo[$HoraLimpia].Tel=$TelActual
-                                $CuelguesManuales[$Ses]=$true; $EvA="$symStop CUELGUE MANUAL (Clic)"; $ColorA=[System.Drawing.Color]::LightCoral
+                                # Pata fantasma de un login CANCELADO a medio proceso (no una llamada real colgada) —
+                                # ver detector "Asesor canceló el intento de firma" en PASO 4. Se excluye del
+                                # CUELGUE MANUAL para no confundirlo con un cuelgue real.
+                                $MsEndSesEs = & $MsDeSlot "$HoraLimpia,$MsLimpio5"
+                                $EsCierreDeLoginCancelado = ($MsEndSesEs -ge 0 -and [math]::Abs($MsEndSesEs - $UltimoLoginCanceladoMs) -le 3000)
+                                if (-not $EsCierreDeLoginCancelado) {
+                                    $CuelguesManuales[$Ses]=$true; $EvA="$symStop CUELGUE MANUAL (Clic)"; $ColorA=[System.Drawing.Color]::LightCoral
+                                }
                             }
                             elseif ($linea -match "ProcessSessionEndedEvent: Entry\. connectinoId = (\d+)") {
                                 $Ses=$matches[1]; $EventosTiempo[$HoraLimpia].Sesion=$Ses
@@ -2939,12 +3035,16 @@ $btnAnalizar.Add_Click({
                                 $SesionHoraInicio.Remove($Ses) | Out-Null   # limpiar tracking de UpdateHistoryRecord
                                 $_PrimerFonoSes.Remove($Ses) | Out-Null     # liberar 1er-número (el ID de sesión se recicla)
 
+                                $MsEndedEs = & $MsDeSlot "$HoraLimpia,$MsLimpio5"
+                                $EsCierreDeLoginCanceladoPSE = ($MsEndedEs -ge 0 -and [math]::Abs($MsEndedEs - $UltimoLoginCanceladoMs) -le 3000)
                                 if (-not $CuelguesVistos[$FirmaUnica]) {
                                     $CuelguesVistos[$FirmaUnica]=$true
-                                    if ($TelActual -match "^\+?564(3\d{5})\d{6}$") {
-                                        # Cierre de la llamada FAC de firma: evento interno sin valor para el análisis.
-                                        # Antes pintaba "Entry.ConnectinoID=N" (resto de la 1ª versión); además esa fila
-                                        # con contenido reseteaba $RecienFirmado y destapaba el DEFAULT automático.
+                                    if ($TelActual -match "^\+?564(3\d{5})\d{6}$" -or $EsCierreDeLoginCanceladoPSE) {
+                                        # Cierre de la llamada FAC de firma (o de un login cancelado a medio proceso,
+                                        # ver "Asesor canceló el intento de firma" en PASO 4): evento interno sin
+                                        # valor para el análisis. Antes pintaba "Entry.ConnectinoID=N" (resto de la 1ª
+                                        # versión); además esa fila con contenido reseteaba $RecienFirmado y
+                                        # destapaba el DEFAULT automático.
                                         $EventosTiempo[$HoraLimpia].Tel = "-"
                                     } else {
                                         $SlotFin = "$HoraLimpia,$MsLimpio5"
@@ -5047,6 +5147,8 @@ $btnAnalizar.Add_Click({
                         $Interp = "FALLA TÉCNICA (Justificado / Caída de Sistema o Red)"; $ColorInterp = [System.Drawing.Color]::LimeGreen
                     }
                     elseif ($Obj.AppLog -match "CIERRE FORZADO DE LA APLICACIÓN") { $Interp = $Obj.AppLog; $ColorInterp = [System.Drawing.Color]::Red; if ($Obj.RawAppLog -ne "" -and $Obj.RawInterpretacion -eq "") { $Obj.RawInterpretacion += $Obj.RawAppLog } }
+                    elseif ($Obj.AppLog -match "Aplicación reabierta tras reinicio de Windows") { $Interp = $Obj.AppLog; $ColorInterp = [System.Drawing.Color]::LimeGreen; if ($Obj.RawAppLog -ne "" -and $Obj.RawInterpretacion -eq "") { $Obj.RawInterpretacion += $Obj.RawAppLog } }
+                    elseif ($Obj.AppLog -match "Aplicación reiniciada \(causa incierta") { $Interp = $Obj.AppLog; $ColorInterp = [System.Drawing.Color]::Orange; if ($Obj.RawAppLog -ne "" -and $Obj.RawInterpretacion -eq "") { $Obj.RawInterpretacion += $Obj.RawAppLog } }
                     elseif ($Obj.AppLog -match "Aplicación iniciada") { $Interp = $Obj.AppLog; $ColorInterp = [System.Drawing.Color]::LimeGreen; if ($Obj.RawAppLog -ne "" -and $Obj.RawInterpretacion -eq "") { $Obj.RawInterpretacion += $Obj.RawAppLog } }
                     elseif ($Obj.AppLog -match "hilo interno abortado") { $Interp = "Aviso: Avaya reinició un hilo interno (la app NO se cerró)"; $ColorInterp = [System.Drawing.Color]::Orange }
                     elseif ($Obj.AppLog -match "System.Exception") { $Interp = "Falla grave en llamada"; $ColorInterp = [System.Drawing.Color]::Red }
@@ -5111,6 +5213,9 @@ $btnAnalizar.Add_Click({
                     elseif ($ValidandoLogin -eq $true) {
                         if ($Obj.RawAux -match "(?i)Enter\s+Aux" -or $Obj.Aux -match "ESTADO: AUX|ESTADO: PENDINGAUX|NUEVO_RC") {
                             $Interp = "Usuario firmado exitosamente"; $ColorInterp = [System.Drawing.Color]::LimeGreen; $ValidandoLogin = $false; $RecienFirmado = $true; $LoginYaConfirmado = $true
+                            # Evidencia para el CellClick (Pablo, 21/09/2026): sin esto .Tag quedaba vacío y el
+                            # clic en la celda no mostraba nada — la evidencia real vive en RawAux, no se copiaba.
+                            if ($Obj.RawAux -ne "" -and $Obj.RawInterpretacion -eq "") { $Obj.RawInterpretacion += $Obj.RawAux }
                             $EsperandoDefaultPostLogin = $true; $EnDefaultPostLogin = $false   # el DEFAULT automático de Avaya llega enseguida
                             $CodigoRC = ""; if ($Obj.RawAux -match "(?i)ReasonCode[=\[>:\s]*(\d+)") { $CodigoRC = $matches[1] }
                             # Intentar también desde XML
@@ -5127,6 +5232,7 @@ $btnAnalizar.Add_Click({
                         }
                         elseif ($Obj.RawAux -match "(?i)AgentStateChanged.*newState=Ready" -or $Obj.Aux -match "ESTADO: READY|ESTADO: AUTOIN|ESTADO: MANUALIN") {
                             $Interp = "Usuario firmado exitosamente"; $ColorInterp = [System.Drawing.Color]::LimeGreen; $ValidandoLogin = $false; $RecienFirmado = $true; $LoginYaConfirmado = $true
+                            if ($Obj.RawAux -ne "" -and $Obj.RawInterpretacion -eq "") { $Obj.RawInterpretacion += $Obj.RawAux }
                             $EsperandoDefaultPostLogin = $true; $EnDefaultPostLogin = $false   # el DEFAULT automático de Avaya llega enseguida
                         }
                     }
@@ -7255,6 +7361,57 @@ $btnExportarCSV.Add_Click({
 # MÓDULO 6: CLICK EN CELDA
 # ====================================================================
 # ====================================================================
+# DIAGNÓSTICO DE "Asesor canceló el intento de firma": explica en
+# lenguaje claro qué significa un login abortado a medio proceso
+# (Pablo, 21/09/2026 — caso real: no se escuchaba nada en la diadema).
+# ====================================================================
+function Get-DiagnosticoLoginCancelado {
+    param([string]$raw)
+    $d  = "DIAGNÓSTICO EN LENGUAJE CLARO`n" + ("=" * 46) + "`n`n"
+    $d += "► QUÉ PASÓ:`n"
+    $d += "El asesor (o el propio sistema) canceló el proceso de firma ANTES de que se`n"
+    $d += "completara — el login nunca llegó a confirmarse con el conmutador (CM).`n`n"
+    $d += "Avaya crea una sesión/llamada interna temporal durante el proceso de firma;`n"
+    $d += "al cancelarse, esa sesión se cierra de inmediato. Por eso este evento puede`n"
+    $d += "verse acompañado de un 'CUELGUE MANUAL' en Endpoint.log — pero NO es una`n"
+    $d += "llamada real siendo colgada, es la limpieza interna del intento de login.`n`n"
+    $d += "► CAUSAS COMUNES:`n"
+    $d += "• El asesor canceló porque algo no funcionaba (ej. diadema sin audio)`n"
+    $d += "• Datos de firma incorrectos o extensión ya en uso`n"
+    $d += "• El conmutador (CM) tardó demasiado en responder y no se esperó`n`n"
+    $d += "► QUÉ REVISAR:`n"
+    $d += "Busca el siguiente 'Intento de firma' / 'Usuario firmado exitosamente' poco`n"
+    $d += "después de esta hora, para confirmar si el asesor sí logró entrar en un`n"
+    $d += "segundo intento.`n`n"
+    $d += "► EVIDENCIA DEL LOG:`n$raw"
+    return $d
+}
+
+# ====================================================================
+# DIAGNÓSTICO DE "Usuario firmado exitosamente": explica en lenguaje
+# claro qué confirma este evento (Pablo, 21/09/2026).
+# ====================================================================
+function Get-DiagnosticoFirmaExitosa {
+    param([string]$raw)
+    $d  = "DIAGNÓSTICO EN LENGUAJE CLARO`n" + ("=" * 46) + "`n`n"
+    $d += "► QUÉ PASÓ:`n"
+    $d += "El asesor completó la firma con éxito — el conmutador (CM) confirmó el`n"
+    $d += "LoginAgent y la sesión pasó a un estado de agente real: AUXILIAR o`n"
+    $d += "DISPONIBLE (Ready). Llegar a cualquiera de los dos SOLO es posible si el`n"
+    $d += "login ya se completó — no existe un estado AUX/Ready sin estar firmado.`n`n"
+    $d += "► DE DÓNDE SALE:`n"
+    $d += "Se dispara al ver, en el AvayaOneX.log, la confirmación de 'Enter Aux' o`n"
+    $d += "un 'AgentStateChanged' con newState=Ready inmediatamente después de un`n"
+    $d += "intento de firma en curso.`n`n"
+    $d += "► NOTA:`n"
+    $d += "Si justo antes hay un intento de firma cancelado, este evento puede`n"
+    $d += "corresponder a un SEGUNDO intento (a veces automático) que sí prosperó —`n"
+    $d += "revisa la evidencia cruda para ver la secuencia completa.`n`n"
+    $d += "► EVIDENCIA DEL LOG:`n$raw"
+    return $d
+}
+
+# ====================================================================
 # DIAGNÓSTICO DE "Falla grave en llamada": traduce el System.Exception
 # crudo a lenguaje claro (qué pasó, dónde tronó y qué significa).
 # La etiqueta se pinta en el render cuando AppLog trae "System.Exception"
@@ -7389,6 +7546,53 @@ $GridResultados.Add_CellClick({
                     $btnCerrarFG.Add_Click({ param($s, $ev) $s.FindForm().Close() })
                     $fFG.Controls.AddRange(@($rtbFG, $btnDiagFG, $btnCerrarFG))
                     [void]$fFG.ShowDialog($Form); $fFG.Dispose()
+                } elseif ($InterpFila -match "Asesor canceló el intento de firma") {
+                    # Misma ventana que "Falla grave en llamada" (RichTextBox + botón VER DIAGNÓSTICO),
+                    # reutilizando el patrón ya establecido.
+                    $fLC = New-Object System.Windows.Forms.Form
+                    $fLC.Text = "Intento de firma cancelado — Evidencia del log"; $fLC.Size = New-Object System.Drawing.Size(760, 560); $fLC.StartPosition = "CenterParent"; $fLC.BackColor = $ColorFondo; $fLC.ForeColor = $ColorTexto
+                    $rtbLC = New-Object System.Windows.Forms.RichTextBox
+                    $rtbLC.Location = New-Object System.Drawing.Point(12, 12); $rtbLC.Size = New-Object System.Drawing.Size(720, 440); $rtbLC.Anchor = "Top,Bottom,Left,Right"
+                    $rtbLC.ReadOnly = $true; $rtbLC.BackColor = [System.Drawing.Color]::FromArgb(20,20,20); $rtbLC.ForeColor = [System.Drawing.Color]::Gainsboro; $rtbLC.Font = New-Object System.Drawing.Font("Consolas", 9)
+                    $rtbLC.Text = "EVIDENCIA DEL LOG ORIGINAL:`n`n$LogCrudo"
+                    $btnDiagLC = New-Object System.Windows.Forms.Button
+                    $btnDiagLC.Text = "VER DIAGNÓSTICO (lenguaje claro)"; $btnDiagLC.Location = New-Object System.Drawing.Point(12, 465); $btnDiagLC.Size = New-Object System.Drawing.Size(280, 35); $btnDiagLC.Anchor = "Bottom,Left"
+                    $btnDiagLC.BackColor = [System.Drawing.Color]::DarkGreen; $btnDiagLC.ForeColor = [System.Drawing.Color]::White; $btnDiagLC.FlatStyle = "Flat"; $btnDiagLC.Font = New-Object System.Drawing.Font("Segoe UI", 10, [System.Drawing.FontStyle]::Bold)
+                    $btnDiagLC.Tag = [string]$LogCrudo
+                    $btnDiagLC.Add_Click({
+                        param($s, $ev)
+                        $DiagTexto = Get-DiagnosticoLoginCancelado -raw ([string]$s.Tag)
+                        [System.Windows.Forms.MessageBox]::Show($DiagTexto, "Diagnóstico — Intento de firma cancelado", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
+                    })
+                    $btnCerrarLC = New-Object System.Windows.Forms.Button
+                    $btnCerrarLC.Text = "Cerrar"; $btnCerrarLC.Location = New-Object System.Drawing.Point(632, 465); $btnCerrarLC.Size = New-Object System.Drawing.Size(100, 35); $btnCerrarLC.Anchor = "Bottom,Right"
+                    $btnCerrarLC.BackColor = [System.Drawing.Color]::Gray; $btnCerrarLC.ForeColor = [System.Drawing.Color]::White; $btnCerrarLC.FlatStyle = "Flat"
+                    $btnCerrarLC.Add_Click({ param($s, $ev) $s.FindForm().Close() })
+                    $fLC.Controls.AddRange(@($rtbLC, $btnDiagLC, $btnCerrarLC))
+                    [void]$fLC.ShowDialog($Form); $fLC.Dispose()
+                } elseif ($InterpFila -match "Usuario firmado exitosamente") {
+                    # Misma ventana que las demás (RichTextBox + botón VER DIAGNÓSTICO), reutilizando el patrón ya establecido.
+                    $fFE = New-Object System.Windows.Forms.Form
+                    $fFE.Text = "Usuario firmado exitosamente — Evidencia del log"; $fFE.Size = New-Object System.Drawing.Size(760, 560); $fFE.StartPosition = "CenterParent"; $fFE.BackColor = $ColorFondo; $fFE.ForeColor = $ColorTexto
+                    $rtbFE = New-Object System.Windows.Forms.RichTextBox
+                    $rtbFE.Location = New-Object System.Drawing.Point(12, 12); $rtbFE.Size = New-Object System.Drawing.Size(720, 440); $rtbFE.Anchor = "Top,Bottom,Left,Right"
+                    $rtbFE.ReadOnly = $true; $rtbFE.BackColor = [System.Drawing.Color]::FromArgb(20,20,20); $rtbFE.ForeColor = [System.Drawing.Color]::Gainsboro; $rtbFE.Font = New-Object System.Drawing.Font("Consolas", 9)
+                    $rtbFE.Text = "EVIDENCIA DEL LOG ORIGINAL:`n`n$LogCrudo"
+                    $btnDiagFE = New-Object System.Windows.Forms.Button
+                    $btnDiagFE.Text = "VER DIAGNÓSTICO (lenguaje claro)"; $btnDiagFE.Location = New-Object System.Drawing.Point(12, 465); $btnDiagFE.Size = New-Object System.Drawing.Size(280, 35); $btnDiagFE.Anchor = "Bottom,Left"
+                    $btnDiagFE.BackColor = [System.Drawing.Color]::DarkGreen; $btnDiagFE.ForeColor = [System.Drawing.Color]::White; $btnDiagFE.FlatStyle = "Flat"; $btnDiagFE.Font = New-Object System.Drawing.Font("Segoe UI", 10, [System.Drawing.FontStyle]::Bold)
+                    $btnDiagFE.Tag = [string]$LogCrudo
+                    $btnDiagFE.Add_Click({
+                        param($s, $ev)
+                        $DiagTexto = Get-DiagnosticoFirmaExitosa -raw ([string]$s.Tag)
+                        [System.Windows.Forms.MessageBox]::Show($DiagTexto, "Diagnóstico — Usuario firmado exitosamente", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
+                    })
+                    $btnCerrarFE = New-Object System.Windows.Forms.Button
+                    $btnCerrarFE.Text = "Cerrar"; $btnCerrarFE.Location = New-Object System.Drawing.Point(632, 465); $btnCerrarFE.Size = New-Object System.Drawing.Size(100, 35); $btnCerrarFE.Anchor = "Bottom,Right"
+                    $btnCerrarFE.BackColor = [System.Drawing.Color]::Gray; $btnCerrarFE.ForeColor = [System.Drawing.Color]::White; $btnCerrarFE.FlatStyle = "Flat"
+                    $btnCerrarFE.Add_Click({ param($s, $ev) $s.FindForm().Close() })
+                    $fFE.Controls.AddRange(@($rtbFE, $btnDiagFE, $btnCerrarFE))
+                    [void]$fFE.ShowDialog($Form); $fFE.Dispose()
                 } else {
                     [System.Windows.Forms.MessageBox]::Show("EVIDENCIA DEL LOG ORIGINAL:`n`n$LogCrudo", "Análisis de Logs Avaya OneX Agent - Detalle", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
                 }
