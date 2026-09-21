@@ -1470,6 +1470,35 @@ $btnAnalizar.Add_Click({
                             elseif ($SlotConferenciaBoton -and $linea -match "Begin Executing method InitiateConference\(") {
                                 $EventosTiempo[$SlotConferenciaBoton].RawAgente += "$linea`n"
                             }
+                            elseif ($linea -match "GUI Method (STARTED|ENDED): EndConferenceCallHandler") {
+                                # El asesor da clic en el botón/ícono para colgar/salir de la conferencia
+                                # (distinto de EndConference que dispara el PBX solo). Pablo, 18/09/2026: pidió
+                                # identificar cuando el cuelgue de la conferencia lo origina el asesor, porque
+                                # hoy solo se veía "FIN DE LLAMADA NORMAL" genérico sin decir quién colgó.
+                                if ($matches[1] -eq "STARTED") {
+                                    $SlotFinConfBoton = "$HoraLimpia,$MsLimpio"
+                                    Init-Hora $SlotFinConfBoton
+                                    if ($EventosTiempo[$SlotFinConfBoton].Agente -eq "") {
+                                        $EventosTiempo[$SlotFinConfBoton].Agente      = "$symStop Asesor cuelga la conferencia"
+                                        $EventosTiempo[$SlotFinConfBoton].ColorAgente = [System.Drawing.Color]::OrangeRed
+                                    }
+                                    $EventosTiempo[$SlotFinConfBoton].RawAgente += "$linea`n"
+                                } else {
+                                    if ($SlotFinConfBoton) { $EventosTiempo[$SlotFinConfBoton].RawAgente += "$linea`n" }
+                                    $SlotFinConfBoton = ""
+                                }
+                            }
+                            elseif ($linea -match "AddVoiceInteraction:.*?destination=([^;]+);.*?intent=VoiceConsultConference") {
+                                # Momento exacto en que el asesor captura/marca el destino de la consulta de
+                                # conferencia (justo tras dar clic en el botón Conferencia y elegir/capturar el
+                                # número). Vive en AvayaOneXLog (WorkServiceImpl), no en EndpointLog — por eso
+                                # tiene que estar en ESTE bucle (PASO 4) y no en el de EndpointLog (PASO 5).
+                                $SlotMarcConf = "$HoraLimpia,$MsLimpio"
+                                Init-Hora $SlotMarcConf
+                                $EventosTiempo[$SlotMarcConf].Agente      = "$symArr Marcando para conferencia: $($matches[1])"
+                                $EventosTiempo[$SlotMarcConf].ColorAgente = [System.Drawing.Color]::Orchid
+                                $EventosTiempo[$SlotMarcConf].RawAgente  += "$linea`n"
+                            }
                             # --- ReasonCode y estados del agente (respaldo) ---
                             elseif ($linea -match "(?i)WorkServiceImpl EnterAux:session=.*?;code=(\d+)") {
                                 Init-Hora $HoraLimpia; $Rc = $matches[1]
@@ -2358,7 +2387,13 @@ $btnAnalizar.Add_Click({
                                 $Script:FallaRecepLineas++
                             }
                         }
-                        if ($HoraLimpia -ne "" -and $linea -match "System\.Exception") {
+                        # "Unable to find Root is missing for vi:...": excepción interna que OneX genera y
+                        # atrapa SOLO al colgar una conferencia (limpieza de los objetos VoiceInteraction de
+                        # las patas ya fusionadas) — nunca llega a mostrarse en pantalla. Verificado con 2
+                        # casos reales (Pablo, 18/09/2026): ambos cuelgues de conferencia normales, sin ningún
+                        # error visible. Se excluye por completo de "Falla grave en llamada" (Pablo confirmó
+                        # que tampoco aparece en otros días fuera de este escenario).
+                        if ($HoraLimpia -ne "" -and $linea -match "System\.Exception" -and $linea -notmatch "Unable to find Root is missing for vi") {
                             $SlotErr = "$HoraLimpia,$MsLimpio"; Init-Hora $SlotErr; $EventosTiempo[$SlotErr].AppLog = "¡ERR CRÍTICO!: System.Exception"
                             $EventosTiempo[$SlotErr].ColorApp = [System.Drawing.Color]::DarkRed; $EventosTiempo[$SlotErr].RawAppLog += "$linea`n"; $EventosTiempo[$SlotErr].RawInterpretacion += "$linea`n"
                         }
@@ -2499,6 +2534,16 @@ $btnAnalizar.Add_Click({
                         if ($linea -match "Conference_CompleteConf: nFirstCall:\s*\d+,\s*nConsultCall:\s*(\d+)") {
                             $ConsultaTransf.Remove($matches[1])   # quitar callIndex también por si acaso
                             $_CfPend = $false; $_CfDone = $true
+                        }
+                    }
+                    # Rescate de "Desconocido": $ConsultaConf se sembró con el primer UpdateHistoryRecord
+                    # vacío de la sesión, pero a veces el número real (RemoteUserAddress) llega en OTRO
+                    # UpdateHistoryRecord de la MISMA sesión unos ms/segundos después (ya capturado en
+                    # $_CfPhones, que se sigue llenando durante TODA la pasada). Aquí, con la pasada ya
+                    # completa, $_CfPhones tiene la foto final — se usa para rellenar los que quedaron ciegos.
+                    foreach ($kCfResc in @($ConsultaConf.Keys)) {
+                        if ($ConsultaConf[$kCfResc] -eq "Desconocido" -and $_CfPhones.ContainsKey($kCfResc) -and $_CfPhones[$kCfResc] -ne "") {
+                            $ConsultaConf[$kCfResc] = $_CfPhones[$kCfResc]
                         }
                     }
 
@@ -2999,7 +3044,18 @@ $btnAnalizar.Add_Click({
                                     else                      { $EvA="$symArr TRANSFERENCIA INICIADA";           $ColorA=[System.Drawing.Color]::Plum }
                                 }
                             }
-                            elseif ($linea -match "Message type= MoveSessionToConferenceRequest" -or $linea -match "OnRequestMoveSessionToConference") { $EvA="↔ CONFERENCIA INICIADA"; $ColorA=[System.Drawing.Color]::Orchid }
+                            elseif ($linea -match "Message type= MoveSessionToConferenceRequest" -or $linea -match "OnRequestMoveSessionToConference") {
+                                # Dedup: Avaya manda MoveSessionToConferenceRequest DOS VECES por intento (una
+                                # para la llamada retenida, otra para la de consulta), y cada una dispara TANTO
+                                # "Message type=..." como "OnRequestMoveSessionToConference" — hasta 4 líneas
+                                # coincidiendo en el mismo segundo. Si ya hay una fila "CONFERENCIA INICIADA" en
+                                # este mismo segundo (slot base o ms), no crear otra.
+                                $YaHayConfIni = $false
+                                foreach ($kC in @($EventosTiempo.Keys)) {
+                                    if (($kC -eq $HoraLimpia -or $kC -match "^$([regex]::Escape($HoraLimpia)),\d+$") -and $EventosTiempo[$kC].Agente -match "CONFERENCIA INICIADA") { $YaHayConfIni = $true; break }
+                                }
+                                if (-not $YaHayConfIni) { $EvA="↔ CONFERENCIA INICIADA"; $ColorA=[System.Drawing.Color]::Orchid }
+                            }
                             elseif ($linea -match "Message type= LogoutRequest") { $EvA="¦ ASESOR SOLICITÓ DESFIRMARSE (Clic en Salir)"; $ColorA=[System.Drawing.Color]::LightCoral }
                             elseif ($linea -match "SetPhoneDisplay = <Transferencia realizada") {
                                 # PBX señalizó "Transferencia realizada" → confirmar el slot provisional de Transfer_CompleteSetup.
@@ -3190,6 +3246,7 @@ $btnAnalizar.Add_Click({
             # ================================================================
             $LimHoras = @($EventosTiempo.Keys | Sort-Object)
             $MarcandoPorSes = @{}   # sesión de consulta → slot: garantiza UN SOLO "MARCANDO" por sesión
+            $ConsultaConfPorSes = @{}   # sesión de consulta → slot: garantiza UN SOLO sufijo de conferencia por sesión
             foreach ($HoraLA in $LimHoras) {
                 if (-not $EventosTiempo.ContainsKey($HoraLA)) { continue }
                 $ObjLA = $EventosTiempo[$HoraLA]
@@ -3218,32 +3275,30 @@ $btnAnalizar.Add_Click({
                 # ① Consulta de Conferencia — SIEMPRE verifica antes que Transferencia.
                 # Avaya OneX crea la leg de conferencia internamente como si fuera transferencia,
                 # por lo que una sesión puede quedar en ambas tablas. Conferencia tiene prioridad.
+                # Simplificación (Pablo, 18/09/2026): antes esto creaba una fila APARTE "CONSULTA DE
+                # CONFERENCIA → X" (y a veces duplicada, una por cada fila candidata de la sesión). Ahora
+                # se fusiona directamente en la fila de INICIO DE LLAMADA real de esa sesión — mismo
+                # criterio que ya se usa para fusionar INICIO DE LLAMADA + INICIO DE SESIÓN.
                 if ($ConsultaConf.ContainsKey($SesLA) -and
                     $ObjLA.Interpretacion -match "LÍNEA ABIERTA SIN MARCAR|INICIO DE LLAMADA|INICIO DE SESIÓN") {
-                    $SlotConf = if ($ObjLA.Interpretacion -match "INICIO DE LLAMADA") { Get-SlotConsulta $HoraLA $SesLA $ObjLA.Tel } else { $HoraLA }
-                    # Si el slot quedó en base (sin ms) y hay ms-slots en ese segundo (ej: Drag/Drop,
-                    # CONFERENCIA INICIADA), moverlo al final para que aparezca en orden cronológico.
-                    if ($SlotConf -notmatch ",") {
-                        $BaseHora = $SlotConf; $msMax = 0
-                        foreach ($k in @($EventosTiempo.Keys)) {
-                            if ($k -match "^$([regex]::Escape($BaseHora)),(\d+)$" -and [int]$matches[1] -gt $msMax) { $msMax = [int]$matches[1] }
-                        }
-                        if ($msMax -gt 0) {
-                            $SlotMs = "$BaseHora,$($msMax + 1)"
-                            Init-Hora $SlotMs
-                            $Src = $EventosTiempo[$BaseHora]; $Dst = $EventosTiempo[$SlotMs]
-                            foreach ($campo in @("Sesion","Tel","ViId","Topic",
-                                                  "Agente","ColorAgente","Audio","ColorAudio","Aux","ColorAux",
-                                                  "Ispeac","ColorIspeac","SysLog","ColorSys","AppLog","ColorApp",
-                                                  "RawInterpretacion","RawAgente","RawAudio","RawAux","RawIspeac","RawSysLog","RawAppLog")) {
-                                $Dst[$campo] = $Src[$campo]
-                            }
-                            $EventosTiempo.Remove($BaseHora) | Out-Null
-                            $SlotConf = $SlotMs
-                        }
+                    $SesTieneInicioLlamConf = $false
+                    foreach ($kIniC in @($EventosTiempo.Keys)) {
+                        if ($EventosTiempo[$kIniC].Sesion -eq $SesLA -and $EventosTiempo[$kIniC].Interpretacion -match "INICIO DE LLAMADA") { $SesTieneInicioLlamConf = $true; break }
                     }
-                    $EventosTiempo[$SlotConf].Interpretacion = "$symArr CONSULTA DE CONFERENCIA $symArr $($ConsultaConf[$SesLA])"
-                    $EventosTiempo[$SlotConf].ColorInterpretacion = [System.Drawing.Color]::Orchid
+                    # Fila huérfana/duplicada (LÍNEA ABIERTA o INICIO DE SESIÓN) cuya sesión YA tiene un
+                    # INICIO DE LLAMADA real en otro slot → limpiarla, el sufijo se pinta sobre el INICIO.
+                    if ($ObjLA.Interpretacion -notmatch "INICIO DE LLAMADA" -and $SesTieneInicioLlamConf) {
+                        $ObjLA.Interpretacion = ""; $ObjLA.ColorInterpretacion = [System.Drawing.Color]::White
+                        $ObjLA.RawInterpretacion += "[DEDUP CONSULTA CONF] fila duplicada (sesión $SesLA ya tiene INICIO) — se fusiona en el INICIO`n"
+                        continue
+                    }
+                    # Dedup: un solo sufijo por sesión de consulta.
+                    if ($ConsultaConfPorSes.ContainsKey($SesLA)) { continue }
+                    $destConf = $ConsultaConf[$SesLA]
+                    $sufijoConf = if ($destConf -and $destConf -ne "Desconocido") { " — Consulta de conferencia hacia $destConf" } else { " — Consulta de conferencia" }
+                    $ObjLA.Interpretacion += $sufijoConf
+                    $ObjLA.RawInterpretacion += "[CONSULTA DE CONFERENCIA] Sesión $SesLA usada como leg de consulta para armar la conferencia.`n"
+                    $ConsultaConfPorSes[$SesLA] = $HoraLA
                     continue
                 }
                 # ② Consulta de Transferencia
@@ -4129,6 +4184,21 @@ $btnAnalizar.Add_Click({
                     if ($mL -lt 0 -or $mL -gt $msFinL) { continue }
                     if ($mL -gt $msIniL) { $msIniL = $mL; $slotIniL = $kL }
                 }
+                if (-not $slotIniL) {
+                    # Fallback (Pablo, 18/09/2026 — caso conferencia): UpdateHistoryRecord no trae ms, así
+                    # que la fila de origen de esta sesión nace en el slot BASE (sin ms) del segundo. Si
+                    # OTRA sesión reutiliza ese mismo slot base más tarde (su propio UpdateHistoryRecord cae
+                    # en el mismo segundo), le puede "robar" el campo .Sesion sin tocar su .Interpretacion
+                    # (protegida por el guard de texto ya existente) — por eso la búsqueda por Sesion de
+                    # arriba no la encuentra. Último intento: usar el slot base derivado del propio evento
+                    # de cierre confirmado ("this record has no far-end address" vive en el mismo segundo
+                    # que el nacimiento de la pata).
+                    $BaseSegFdL = ($fdL.Slot -split ',')[0]
+                    if ($EventosTiempo.ContainsKey($BaseSegFdL) -and
+                        $EventosTiempo[$BaseSegFdL].Interpretacion -match "INICIO DE LLAMADA|Sesión bridge del sistema|LÍNEA ABIERTA") {
+                        $slotIniL = $BaseSegFdL; $msIniL = & $MsDeSlot $BaseSegFdL
+                    }
+                }
                 if (-not $slotIniL) { continue }
                 $durMsL = $msFinL - $msIniL
                 $durL = [int]($durMsL / 1000)
@@ -4144,7 +4214,11 @@ $btnAnalizar.Add_Click({
                 if ($durMsL -lt 2000) {
                     foreach ($kPh in @($EventosTiempo.Keys)) {
                         $oPh = $EventosTiempo[$kPh]
-                        if ($null -eq $oPh -or $oPh -isnot [hashtable] -or $oPh.Sesion -ne $sesL) { continue }
+                        if ($null -eq $oPh -or $oPh -isnot [hashtable]) { continue }
+                        # $kPh -eq $slotIniL cubre el caso de fallback: la fila de origen ya identificada
+                        # arriba por slot base, aunque su .Sesion haya quedado con el valor de OTRA sesión
+                        # (robado por un UpdateHistoryRecord posterior que cayó en el mismo slot base).
+                        if ($oPh.Sesion -ne $sesL -and $kPh -ne $slotIniL) { continue }
                         if ($oPh.Interpretacion -notmatch "LÍNEA ABIERTA SIN MARCAR|Sesión bridge del sistema") { continue }
                         $mPh = & $MsDeSlot $kPh
                         if ($mPh -lt ($msIniL - 500) -or $mPh -gt ($msFinL + 500)) { continue }
